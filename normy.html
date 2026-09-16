@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Нормы и состав комплекта — PD_RD</title>
+<link rel="stylesheet" href="pdrd-ui.css?v=0.2.0">
+<style>
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:620px}
+th,td{border-bottom:1px solid var(--line-s);padding:7px 8px;text-align:left;vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:12.5px}
+td.num{white-space:nowrap;font-weight:600}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.tag.ok{background:var(--ok-bg);color:var(--ok)}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.tag.bad{background:var(--bad-bg);color:var(--bad)}
+.tag.dep{background:var(--blue-l);color:var(--blue-d)}
+.filters{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.filters button{border:1px solid var(--line-s);background:#fff;border-radius:999px;padding:5px 12px;cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--blue);color:#fff;border-color:var(--blue)}
+.small{font-size:12.5px;color:var(--muted)}
+.doclist{list-style:none;margin:0;padding:0}
+.doclist li{padding:10px 0;border-bottom:1px solid var(--line-s)}
+.doclist li:last-child{border-bottom:0}
+.doclist .t{font-weight:600;max-width:78ch}
+.doclist .meta{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-top:4px;font-size:13px;color:var(--muted)}
+.doclist .ap{margin-top:3px;font-size:13.5px;max-width:78ch}
+.doclist .num{color:var(--blue-d)}
+.doclist .ap.na{color:var(--bad);font-weight:600}
+details{border-top:1px solid var(--line-s);padding:10px 0}
+details summary{cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
+  <nav aria-label="Разделы">
+    <a href="index.html">Комплект</a>
+    <a class="on" href="normy.html">Нормы</a>
+    <a href="tests.html">Проверка ядра</a>
+  </nav>
+</div></header>
+<main class="wrap">
+  <section class="panel">
+    <h2>Реестр нормативных документов</h2>
+    <p class="sub">Каждое число в расчётах и проверках берётся из этого реестра со ссылкой на документ и пункт.
+      «Сверен» — текст проверен по первоисточнику; остальные документы нужно сверить до выпуска.</p>
+    <div id="sum"></div>
+    <div class="filters" id="flt" role="group" aria-label="Фильтр"></div>
+    <ul class="doclist" id="docs"></ul>
+  </section>
+
+  <section class="panel">
+    <h2>Нормируемые значения</h2>
+    <p class="sub">Значения, которые проверяются по каждой опоре и пролёту.</p>
+    <ul class="doclist" id="vals"></ul>
+  </section>
+
+  <section class="panel">
+    <h2>Пробелы в нормах</h2>
+    <p class="sub">Значений нет в ТТ № 282р — подставлять по аналогии нельзя.</p>
+    <div id="gaps"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Состав проектной документации</h2>
+    <p class="sub">П. 32 Положения, утв. ПП РФ № 87. Обозначения томов (ПЗ, ТКР…) — предложение: шифр и марки ещё не утверждены.</p>
+    <ul class="doclist" id="pd"></ul>
+  </section>
+
+  <section class="panel">
+    <h2>Требования операторов</h2>
+    <p class="sub">Профиль добавляет требования к ТТ № 282р, но не ослабляет их.</p>
+    <div id="prof"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Самопроверка реестра</h2>
+    <div id="chk"></div>
+  </section>
+</main>
+<script src="pdrd-norms.js?v=0.2.0"></script>
+<script src="pdrd-profiles.js?v=0.2.0"></script>
+<script src="pdrd-marks.js?v=0.2.0"></script>
+<script>
+(function(){
+  var N = PDRD_NORMS, $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, text){ var e = document.createElement(tag); if(cls) e.className = cls; if(text !== undefined) e.textContent = text; return e; }
+  function row(tbody, cells){ var tr = el('tr'); cells.forEach(function(c){ var td = el('td'); if (c && c.nodeType) td.appendChild(c); else td.textContent = c == null ? '' : c; tr.appendChild(td); }); tbody.appendChild(tr); return tr; }
+  function statusTag(d){
+    var cls = { 'действует':'ok', 'действует до':'ok', 'ведомственный':'dep', 'требует подтверждения':'warn', 'заменён':'bad' }[d.status] || 'warn';
+    return el('span', 'tag ' + cls, N.docStatusText(d));
+  }
+  function fmtDate(s){ return s ? s.split('-').reverse().join('.') : '—'; }
+  function fmtVal(v){
+    if (v.value === true) return 'обязательно';
+    if (v.value === false) return 'не допускается';
+    if (Array.isArray(v.value)) return v.value.join('–') + ' ' + v.unit;
+    if (v.unit === 'доля') return Math.round(v.value * 100) + ' %';
+    return String(v.value).replace('.', ',') + (v.unit ? ' ' + v.unit : '');
+  }
+
+  var groups = ['Все'].concat(N.DOCS.map(function(d){ return d.grp; }).filter(function(g, i, a){ return a.indexOf(g) === i; }));
+  var cur = 'Все';
+  function drawDocs(){
+    var tb = $('docs'); tb.innerHTML = '';
+    N.DOCS.filter(function(d){ return cur === 'Все' || d.grp === cur; }).forEach(function(d){
+      var li = el('li');
+      li.appendChild(el('div', 't', d.title));
+      var m = el('div', 'meta');
+      m.appendChild(statusTag(d));
+      if (d.ed) m.appendChild(el('span', '', d.ed));
+      m.appendChild(el('span', '', d.checked ? 'сверен ' + fmtDate(d.checked) : 'не сверен'));
+      li.appendChild(m);
+      li.appendChild(el('div', 'ap' + (d.notApplicable ? ' na' : ''), d.apply));
+      tb.appendChild(li);
+    });
+  }
+  groups.forEach(function(g){
+    var b = el('button', '', g); b.type = 'button'; b.setAttribute('aria-pressed', g === cur);
+    b.onclick = function(){ cur = g; Array.prototype.forEach.call($('flt').children, function(x){ x.setAttribute('aria-pressed', x === b); }); drawDocs(); };
+    $('flt').appendChild(b);
+  });
+  drawDocs();
+
+  var checked = N.DOCS.filter(function(d){ return d.checked; }).length;
+  var s = el('div', 'msg warn', 'Документов: ' + N.DOCS.length + ', сверено с первоисточником: ' + checked + '. Остальные сверить по КонсультантПлюс, Гаранту или Техэксперту до выпуска.');
+  $('sum').appendChild(s);
+
+  N.VALUES.forEach(function(v){
+    var r = N.val(v.id), li = el('li');
+    var top = el('div', 't'); top.appendChild(el('span', 'num', fmtVal(v) + ' ')); top.appendChild(document.createTextNode('— ' + v.what)); li.appendChild(top);
+    var m = el('div', 'meta'); m.appendChild(el('span', '', r.ref));
+    m.appendChild(r.warn ? el('span', 'tag warn', v.status === 'требует подтверждения' ? 'требует подтверждения' : 'сверить номер пункта') : el('span', 'tag ok', 'подтверждено'));
+    li.appendChild(m); $('vals').appendChild(li);
+  });
+
+  N.GAPS.forEach(function(g){
+    var d = el('div', 'msg warn'); d.appendChild(el('b', '', g.what)); d.appendChild(el('div', '', g.note)); $('gaps').appendChild(d);
+  });
+
+  var rules = { always:'всегда', dpt:'если нужна ДПТ; иначе — обоснование со ссылкой на ПП РФ № 1816', choice:'при наличии шкафов, контейнеров, НРП', smeta:'по п. 34 Положения или по заданию' };
+  PDRD_MARKS.PD.forEach(function(m){
+    var li = el('li');
+    li.appendChild(el('div', 't', 'Раздел ' + m.n + '. ' + m.title));
+    var mt = el('div', 'meta'); mt.appendChild(el('span', 'tag dep', m.code)); mt.appendChild(el('span', '', 'разрабатывается ' + rules[m.rule]));
+    li.appendChild(mt);
+    if (m.note) li.appendChild(el('div', 'ap', m.note));
+    $('pd').appendChild(li);
+  });
+
+  PDRD_PROFILES.LIST.forEach(function(p){
+    if (!p.req.length) return;
+    var d = el('details'); if (p.pilot) d.open = true;
+    d.appendChild(el('summary', '', p.title + (p.pilot ? ' — профиль пилота' : '')));
+    d.appendChild(el('p', 'small', p.source + '. Смета: ' + p.smeta + '. Сдача: ' + p.delivery + '.'));
+    var w = el('div', 'tbl'), t = el('table'), tb = el('tbody');
+    t.innerHTML = '<thead><tr><th>Пункт ТЗ</th><th>Требование</th></tr></thead>';
+    p.req.forEach(function(r){ var tr = row(tb, [r.ref, r.text]); if (r.need){ tr.children[1].appendChild(el('span', 'tag warn', ' ' + r.need)); } });
+    t.appendChild(tb); w.appendChild(t); d.appendChild(w); $('prof').appendChild(d);
+  });
+
+  var c = N.check(), stop = c.filter(function(x){ return x.lv === 'stop'; }), warn = c.filter(function(x){ return x.lv === 'warn'; });
+  $('chk').appendChild(el('div', 'msg ' + (stop.length ? 'bad' : 'ok'), stop.length ? 'Ошибок в реестре: ' + stop.length : 'Ошибок в реестре нет: ссылки на заменённые документы и значения без пункта отсутствуют.'));
+  if (warn.length){
+    var ul = el('ul', 'gaps'); warn.forEach(function(x){ ul.appendChild(el('li', '', x.txt)); });
+    $('chk').appendChild(el('p', 'small', 'Требует внимания (' + warn.length + '):')); $('chk').appendChild(ul);
+  }
+})();
+</script>
+</body>
+</html>

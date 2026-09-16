@@ -5,7 +5,7 @@
 (function (global) {
 'use strict';
 
-var VERSION = '0.1.0';
+var VERSION = '0.2.0';
 var SCHEMA  = 'pdrd-project/1';
 var PREFIX  = 'pdrd_';
 var KEY     = 'pdrd_project_v1';
@@ -45,7 +45,12 @@ function blank() {
       marks: { pd: [], rd: [] }, marksApproved: false,
       stage: 'ПД+РД',
       object: '', place: '',
-      customer: '', operator: '', user: '', owner: 'ПАО «Россети Юг»',
+      /* Роли сторон. Оператор связи — пользователь инфраструктуры и заказчик сети;
+         подрядчик строит сеть в его интересах и может выступать заявителем. */
+      operator: '',      // ПАО «Ростелеком»
+      contractor: '',    // ООО «СвязьстройТелеКом»
+      designCustomer: '',// заказчик ПД (с кем договор на ПИР)
+      owner: 'ПАО «Россети Юг»',
       branch: 'филиал ПАО «Россети Юг» — «Кубаньэнерго»',
       signs: { gip: GIP.fio, gipPost: GIP.post, razrab: '', prov: '', nkontr: '' },
       releaseDate: ''
@@ -186,6 +191,14 @@ function readV25() {
   };
 }
 
+/* Разбор формулировки V25 «ООО "…" в интересах ПАО "…"» на подрядчика и оператора */
+function splitParties(s) {
+  s = String(s || '').trim();
+  var m = /^(.*?)\s+в\s+интересах\s+(.*)$/i.exec(s);
+  if (!m) return { operator: s, contractor: '' };
+  return { contractor: m[1].trim(), operator: m[2].trim() };
+}
+
 /* ------------------------------------------------------------ готовность к выпуску */
 /* Предварительный перечень блокирующих пробелов паспорта (полный аудит — этап 7). */
 function passportGaps(d) {
@@ -194,6 +207,7 @@ function passportGaps(d) {
   if (!p.shifr || !p.shifrApproved) g.push('Шифр не утверждён');
   if (!p.marksApproved) g.push('Марки комплектов не утверждены');
   if (!p.object) g.push('Не указано наименование объекта');
+  if (!p.operator) g.push('Не указан оператор связи (пользователь инфраструктуры)');
   if (!s.razrab) g.push('Не указан «Разработал»');
   if (!s.prov) g.push('Не указан «Проверил»');
   if (!s.nkontr) g.push('Не указан «Н. контроль»');
@@ -211,7 +225,7 @@ global.PDRD = {
   blank: blank, migrate: migrate, load: load, save: save, refresh: refresh,
   reset: reset, replaceAll: replaceAll, hasProject: hasProject,
   exportJson: exportJson, importJson: importJson, parseProject: parseProject,
-  readV25: readV25, passportGaps: passportGaps,
+  readV25: readV25, passportGaps: passportGaps, splitParties: splitParties,
   safeSet: safeSet
 };
 })(typeof window !== 'undefined' ? window : globalThis);
