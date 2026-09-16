@@ -291,15 +291,15 @@ function dataFromProject(d, tpl) {
     'КАБЕЛЬ_МАРКА': cb.mark, 'КАБЕЛЬ_ОВ': cb.fibers,
     'ОБОЗНАЧЕНИЕ_ПД': p.shifr || 'ШИФР НЕ УТВЕРЖДЁН'
   };
-  var tables = {};
+  var tables = {}, blocks = {};
   var N = global.PDRD_NORMS;
   if (N) {
     /* Нормируемые расстояния ТТ № 282р — по классам напряжения проекта */
     var rows = [];
     kvs.forEach(function (k) {
-      var wireType = k <= 1 ? (d.lines.filter(function (x) { return +x.kv === k; }).map(function (x) { return x.wireType || ''; }).join(' ') || '') : '';
+      var wireType = k <= 1 ? ((d.lines.filter(function (x) { return +x.kv === k; }).map(function (x) { return x.wireType || ''; }).join(' ') || '') + ' ' + ((d.wiresByKv || {})[String(k).replace('.', ',')] || []).map(function (w) { return w.mark; }).join(' ')) : '';
       var r = N.wireDistance(k, wireType);
-      rows.push(['ОКСН — провод ВЛ ' + String(k).replace('.', ',') + ' кВ' + (k <= 1 ? (r.gap ? ' (тип провода не задан)' : ' с СИП') : '') + ', на опоре и в пролёте',
+      rows.push(['ОКСН — провод ВЛ ' + String(k).replace('.', ',') + ' кВ' + (k <= 1 ? (/сип/i.test(wireType) ? ' с СИП' : ' (неизолированный провод)') : '') + ', на опоре и в пролёте',
                  r.value === null ? 'не установлено' : 'не менее ' + String(r.value).replace('.', ',') + ' м', r.ref]);
     });
     ['tt.dist.element', 'tt.dist.ground', 'tt.dist.fixH', 'tt.dist.fixV', 'tt.tag.dist'].forEach(function (id) {
@@ -308,6 +308,23 @@ function dataFromProject(d, tpl) {
     });
     tables['РАССТОЯНИЯ_НОРМЫ'] = { caption: 'Таблица — Нормируемые расстояния',
       cols: [{ t: 'Наименование', w: 95 }, { t: 'Значение', w: 35 }, { t: 'Документ, пункт', w: 45 }], rows: rows };
+  }
+  var cr = d.calcResult;
+  if (cr) {
+    var STN = { ok: 'обосновано', exceed: 'не выполнено', blocked: 'нет данных', excluded: 'исключена' };
+    var f2 = function (v, k) { return v === null || v === undefined ? '—' : String(Math.round(v * Math.pow(10, k)) / Math.pow(10, k)).replace('.', ','); };
+    tables['ПРОЛЁТЫ'] = { caption: 'Таблица — Результаты расчёта пролётов (габарит до земли — не менее 5,0 м, ТТ № 282р, п. 3.2.4)',
+      cols: [{ t: 'Участок', w: 16 }, { t: 'Пролёт', w: 30 }, { t: 'L, м', w: 14 }, { t: 'Стрела наиб., м', w: 20 }, { t: 'До земли, м', w: 18 }, { t: 'До провода, м', w: 18 }, { t: 'Результат', w: 22 }, { t: 'Примечание', w: 37 }],
+      rows: cr.spans.map(function (s) { return [s.section, s.from + ' — ' + s.to, f2(s.L, 1), f2(s.fmax, 2), f2(s.clearance, 2), f2(s.wireDist, 2), STN[s.status], (s.reasons || []).join('; ')]; }) };
+    tables['НАГРУЗКИ'] = { caption: 'Таблица — Проверка несущей способности опор',
+      cols: [{ t: '№ опоры', w: 22 }, { t: 'Марка', w: 18 }, { t: 'M, кН·м', w: 18 }, { t: 'Mдоп, кН·м', w: 18 }, { t: 'Результат', w: 22 }, { t: 'Примечание', w: 77 }],
+      rows: cr.poles.map(function (p2) {
+        var pole = d.poles.filter(function (x) { return x.id === p2.id; })[0] || {};
+        return [(pole.lines || []).map(function (l) { return l.num; }).join(' / '), pole.mark || '', f2(p2.M / 1000, 2), f2(p2.Madm / 1000, 2), STN[p2.status], (p2.reasons || []).join('; ')];
+      }) };
+    var sm = cr.summary;
+    blocks['ВЫВОД_ПО_ОПОРАМ'] = ['По результатам расчёта (программа PD_RD ' + (cr.app || '') + ', ' + ru(cr.at) + '): размещение обосновано на ' + sm.ok + ' опорах; нормы не выполняются на ' + sm.exceed + ' опорах; для ' + sm.blocked + ' опор расчёт не завершён из-за отсутствия исходных данных; ' + sm.excluded + ' опор исключены из размещения по результатам обследования.' +
+      (sm.exceed || sm.blocked ? ' Выпуск проектной документации допускается после устранения несоответствий и получения недостающих данных.' : '')];
   }
   if (cb.mark) {
     tables['КАБЕЛЬ'] = { caption: 'Таблица — Характеристики кабеля',
@@ -325,7 +342,7 @@ function dataFromProject(d, tpl) {
       'ПРОФИЛЬ_GPON': profile === 'rostelecom-b2c-gpon',
       'ПРОФИЛЬ_ВЫМПЕЛКОМ': profile === 'beeline'
     },
-    tables: tables, blocks: {}
+    tables: tables, blocks: blocks
   };
 }
 

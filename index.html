@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ПД и РД ВОЛС на ВЛ — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=0.4.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=0.5.0">
 </head>
 <body>
 <header class="top"><div class="top-in">
@@ -12,6 +12,7 @@
   <nav aria-label="Разделы">
     <a class="on" href="index.html">Комплект</a>
     <a href="vhod.html">Исходные данные</a>
+    <a href="raschet.html">Расчёты</a>
     <a href="shablony.html">Шаблоны</a>
     <a href="normy.html">Нормы</a>
     <a href="tests.html">Проверка ядра</a>
@@ -23,7 +24,7 @@
   <section class="sheet" aria-labelledby="h1">
     <h1 id="h1">Проектная и рабочая документация на размещение ВОЛС на опорах ВЛ 0,4–110 кВ</h1>
     <p class="lead">Инструмент собирает комплект ПД и РД из отчёта по п. 13 Правил, выпущенного АРМ ППО,
-      технического задания оператора и проектных решений. Готово: импорт исходных данных с входным контролем, реестр норм, шаблоны томов.
+      технического задания оператора и проектных решений. Готово: импорт исходных данных с входным контролем, расчёты по ПУЭ-7, реестр норм, шаблоны томов.
       Проект хранится в этом браузере, резервная копия сохраняется в файл.</p>
     <div class="stamp" aria-label="Основная надпись проекта">
       <div class="stamp-roles">
@@ -78,8 +79,8 @@
       <li><div><b>Анализ АРМ ППО и карта полей</b><small>Структура данных V25, сборка DOCX, аудит; разбор пилотного отчёта</small></div><span class="st done">утверждено</span></li>
       <li><div><b>Нормы и шаблоны томов</b><small>Реестр норм, состав ПД, требования операторов, шаблоны томов</small></div><span class="st done">готово</span></li>
       <li><div><b>Модель, импорт, входной контроль</b><small>Пилот: 909 записей → 898 физических опор; лист входного контроля</small></div><span class="st done">готово</span></li>
-      <li><div><b>Расчёты</b><small>Нагрузки ПУЭ-7, уравнение состояния, моменты на опоры</small></div><span class="st work">следующий</span></li>
-      <li><div><b>Решения по опорам и пролётам</b></div><span class="st">далее</span></li>
+      <li><div><b>Расчёты</b><small>Нагрузки ПУЭ-7, уравнение состояния, монтажные таблицы, габариты, моменты на опоры</small></div><span class="st done">готово</span></li>
+      <li><div><b>Решения по опорам и пролётам</b><small>Выбор по развилкам, компоновка на опоре, муфты и запасы</small></div><span class="st work">следующий</span></li>
       <li><div><b>Графическая часть</b><small>10 типов листов со штампами</small></div><span class="st">далее</span></li>
       <li><div><b>Спецификация и ведомость объёмов работ</b></div><span class="st">далее</span></li>
       <li><div><b>Аудит и режим проверки</b></div><span class="st">далее</span></li>
@@ -90,7 +91,7 @@
   <p class="foot">PD_RD <span id="fVer"></span> · инструкция разработки — <a href="https://github.com/Anatoliy031/PD_RD/blob/main/CLAUDE.md">CLAUDE.md</a></p>
 </main>
 
-<script src="pdrd-core.js?v=0.4.0"></script>
+<script src="pdrd-core.js?v=0.5.0"></script>
 <script>
 (function(){
   var P = window.PDRD, $ = function(id){ return document.getElementById(id); };

@@ -77,8 +77,8 @@ t('Реестр норм: нет ошибок', function(){
 t('ОКСН — СИП 0,4 кВ: 0,4 м', function(){
   var r = N.wireDistance(0.4, 'СИП-2 3×50+1×54,6'); eq(r.value, 0.4); eq(r.ref, 'ТТ № 282р, п. 3.2.2', 'ссылка'); return r.ref;
 });
-t('ОКСН — голый провод 0,4 кВ: пробел, без подстановки', function(){
-  var r = N.wireDistance(0.4, 'А 50'); eq(r.gap, true, 'пробел'); eq(r.value, null, 'значение'); return 'значение не подставлено';
+t('ОКСН — голый провод 0,4 кВ: 0,4 м по ПУЭ-7 п. 2.4.89', function(){
+  var r = N.wireDistance(0.4, 'А 50'); eq(r.value, 0.4, 'значение'); eq(r.ref, 'ПУЭ-7, п. 2.4.89', 'ссылка'); return r.ref;
 });
 t('ОКСН — провод по классам 10 / 35 / 110 кВ', function(){
   eq(N.wireDistance(10).value, 0.6, '10 кВ'); eq(N.wireDistance(35).value, 0.6, '35 кВ'); eq(N.wireDistance(110).value, 1.0, '110 кВ');
@@ -210,6 +210,7 @@ if (IM) {
     eq(IM.mergePoles([{ line_id:'А', lat:45, lon:38 }, { line_id:'Б', lat:45.00002, lon:38 }]).length, 2, '2,2 м — нет');
     return 'haversine ' + d1.toFixed(2) + ' м';
   });
+  window.__v25 = v25;
   function rulesOf(o){ var ex = IM.fromV25Object(o); return IM.intake(ex, IM.mergePoles(ex.poles)); }
   function hasRule(list, rule, lv){ return list.some(function(x){ return x.rule === rule && (!lv || x.lv === lv); }); }
   t('Контроль: конец работ раньше начала — блок', function(){
@@ -285,6 +286,182 @@ if (IM) {
     eq(dd.tables['ВК_ЗАМЕЧАНИЯ'].rows.length, r.findings.length, 'замечаний');
     eq(/блокирующих/.test(dd.blocks['ВК_ЗАКЛЮЧЕНИЕ'][0]), true, 'заключение');
     return r.findings.length + ' замечаний';
+  });
+}
+
+/* ---------------------------------------------------------- расчётное ядро (ПУЭ-7) */
+var CL = window.PDRD_CALC;
+function near(a, b, tol, what){ if (!(Math.abs(a - b) <= (tol || 1e-3))) throw new Error((what || 'значение') + ': ожидалось ' + b + ', получено ' + a); }
+if (CL) {
+  t('Таблицы климата: W0 и bэ по районам (табл. 2.5.1, 2.5.3)', function(){
+    eq(CL.w0ByRegion('III'), 650); eq(CL.w0ByRegion('I'), 400); eq(CL.bByRegion('II'), 15); eq(CL.bByRegion('IV'), 25); eq(CL.w0ByRegion('X'), null);
+    return 'III → 650 Па; II → 15 мм';
+  });
+  t('Wг при гололёде (п. 2.5.43): округление и минимум 200 Па до 20 кВ', function(){
+    eq(CL.windIce(650, 10).value, 200, '650 Па, 10 кВ'); eq(CL.windIce(1000, 110).value, 280, '1000 Па → 250 → 280');
+    eq(CL.windIce(1500, 110).value, 360, '1500 → 375 → ближайшее кратное 40 = 360'); eq(CL.windIce(400, 0.4).value, 200, '0,4 кВ');
+    eq(CL.windIce(800, 110).value, 200, '800 → 200 (110 кВ без минимума)');
+    return '200 / 280 / 360 / 200 / 200';
+  });
+  t('Kw (табл. 2.5.2): интерполяция по высоте', function(){
+    near(CL.kw(10, 'A'), 1.0); near(CL.kw(17.5, 'A'), 1.125); near(CL.kw(30, 'B'), 0.975); near(CL.kw(400, 'C'), 2.35);
+    var ok = false; try { CL.kw(10, ''); } catch(e){ ok = e.blocked; } eq(ok, true, 'без типа местности — блок');
+    return 'A 17,5 м → 1,125';
+  });
+  t('αw и Kl (п. 2.5.52), Kl = 1,0 для ВЛ до 1 кВ (п. 2.4.11)', function(){
+    near(CL.alphaW(150), 1); near(CL.alphaW(260), 0.91); near(CL.alphaW(650), 0.70);
+    near(CL.kl(40, 10), 1.2); near(CL.kl(75, 10), 1.15); near(CL.kl(300, 110), 1.0); near(CL.kl(40, 0.4), 1.0);
+    return 'αw(260) = 0,91; Kl(75) = 1,15';
+  });
+  t('Ki, Kd (п. 2.5.49): до 25 м без поправок, выше — табл. 2.5.4', function(){
+    var a = CL.kiKd(20, 30); eq(a.ki, 1); eq(a.kd, 1);
+    var b = CL.kiKd(40, 20); near(b.ki, 1.5); near(b.kd, 0.9);
+    return 'h 40 м: Ki 1,5; d 20 мм: Kd 0,9';
+  });
+  t('Коэффициенты надёжности: ВЛ 10 кВ, ВЛ 0,4 кВ с ОКСН, опоры', function(){
+    var g1 = CL.gammas({ kv:10, iceRegion:'II', purpose:'wire' }); near(g1.gf_w, 1.1); near(g1.gf_i, 1.3); near(g1.gd, 0.5); near(g1.gng, 1.0);
+    var g2 = CL.gammas({ kv:0.4, iceRegion:'III', purpose:'wire' }); near(g2.gng, 1.2); near(g2.gnw, 1.0); near(g2.gf_i, 1.6);
+    var g3 = CL.gammas({ kv:10, iceRegion:'I', purpose:'support1' }); near(g3.gf_w, 1.3); near(g3.gd, 1.0); near(g3.gf_t, 1.3); near(g3.gf_g, 1.05);
+    var g4 = CL.gammas({ kv:10, iceRegion:'I', purpose:'wire', multi:true }); near(g4.gnw, 1.1); near(g4.gng, 1.3);
+    return 'пп. 2.4.11, 2.5.54, 2.5.55, 2.5.62, 2.5.65, 2.5.69, 2.5.70';
+  });
+  /* Контрольный пример 1 (ручной счёт): d = 10,5 мм, 90 кг/км, W0 = 650 Па, bэ = 15 мм, тип A, h = 5 м, L = 40 м, 10 кВ, район II
+     Pг = π·15·(10,5+15)·0,9·9,8·10⁻³ = 10,5986 Н/м; p2 = 10,5986·1,3·0,5 = 6,8891
+     P(ветер) = 0,70·1,2·1,0·1,2·650·10,5·10⁻³ = 6,8796; p4 = 7,5676
+     P(ветер при гололёде) = 1·1,2·1·1,2·200·40,5·10⁻³ = 11,664; p5 = 12,8304 */
+  t('Контрольный пример 1: нагрузки на кабель, ВЛ 10 кВ', function(){
+    var l = CL.loads({ d_mm:10.5, mass_kg_km:90 }, { W0:650, bE:15, terrain:'A', kv:10, h:5, L:40, iceRegion:'II', purpose:'wire' });
+    near(l.p1, 0.09 * 9.80665, 1e-6, 'p1'); near(l.p2n, Math.PI * 15 * 25.5 * 0.9 * 9.8e-3, 1e-6, 'Pг');
+    near(l.p2, 6.8891, 1e-3, 'p2'); near(l.p4n, 6.8796, 1e-3, 'P ветер'); near(l.p4, 7.5676, 1e-3, 'p4');
+    near(l.Wg, 200, 0, 'Wг'); near(l.p5n, 11.664, 1e-3, 'P гол.+ветер'); near(l.p5, 12.8304, 1e-3, 'p5');
+    near(l.p7, Math.sqrt(Math.pow(l.p1 + l.p2, 2) + Math.pow(l.p5, 2)), 1e-9, 'p7');
+    return 'p2 = 6,889; p4 = 7,568; p5 = 12,830 Н/м';
+  });
+  /* Контрольный пример 2: тот же кабель на ВЛ 0,4 кВ, район III: γnг = 1,2, γf = 1,6, Kl = 1
+     p2 = 10,5986·1,2·1,6·0,5 = 10,1747; p4 = 0,7·1·1·1,2·650·10,5·10⁻³·1,1 = 6,3063 */
+  t('Контрольный пример 2: ВЛ 0,4 кВ с ОКСН (п. 2.4.11)', function(){
+    var l = CL.loads({ d_mm:10.5, mass_kg_km:90 }, { W0:650, bE:15, terrain:'A', kv:0.4, h:5, L:40, iceRegion:'III', purpose:'wire' });
+    near(l.p2, 10.1747, 1e-3, 'p2'); near(l.p4, 6.3063, 1e-3, 'p4'); near(l.kl, 1, 0, 'Kl');
+    return 'p2 = 10,175; p4 = 6,306 Н/м';
+  });
+  /* Контрольный пример 3: СИП на ВЛ 0,4 кВ — Cx = 1,1; d = 30 мм, h = 20 м (Kw = 1,25 тип A) */
+  t('Контрольный пример 3: СИП, Cx = 1,1, Kw при h = 20 м', function(){
+    var l = CL.loads({ d_mm:30, mass_kg_km:600, isSip:true }, { W0:500, bE:10, terrain:'A', kv:0.4, h:20, L:30, iceRegion:'I', purpose:'wire' });
+    near(l.kw, 1.25, 1e-9, 'Kw'); near(l.p4n, 0.71 * 1 * 1.25 * 1.1 * 500 * 30e-3, 1e-6, 'P ветер');
+    return 'P = ' + l.p4n.toFixed(3) + ' Н/м';
+  });
+  t('Нет диаметра или типа местности — расчёт заблокирован', function(){
+    var ok = 0;
+    try { CL.loads({ d_mm:null, mass_kg_km:90 }, { W0:650, bE:15, terrain:'A', kv:10, h:5, L:40 }); } catch(e){ if (e.blocked) ok++; }
+    try { CL.regimes({ tMax:40, tMin:null, tAvg:10 }); } catch(e){ if (e.blocked) ok++; }
+    eq(ok, 2); return 'блок с перечнем данных';
+  });
+  t('Режимы п. 2.5.71 и температуры п. 2.5.51', function(){
+    var r = CL.regimes({ tMax:40, tMin:-25, tAvg:10 });
+    eq(r.length, 6); eq(r.filter(function(x){ return x.id === 'ice'; })[0].t, -5, 'гололёд');
+    eq(CL.regimes({ tMax:30, tMin:-50, tAvg:-6 })[3].t, -10, 'tсг ≤ −5 → −10');
+    eq(CL.regimes({ tMax:30, tMin:-40, tAvg:0, altitude:1500 })[3].t, -10, 'высота 1500 м');
+    return '6 режимов';
+  });
+  t('Уравнение состояния: тождество и невязка', function(){
+    var p = { EA:1.5e6, alpha:5e-6, L:50, g1:0.9, H1:600, t1:10, g2:0.9, t2:10 };
+    near(CL.stateEq(p), 600, 1e-6, 'тот же режим');
+    var q = { EA:1.5e6, alpha:5e-6, L:50, g1:0.9, H1:600, t1:10, g2:12, t2:-5 };
+    var H = CL.stateEq(q);
+    var lhs = H - q.EA * q.g2 * q.g2 * q.L * q.L / (24 * H * H);
+    var rhs = q.H1 - q.EA * q.g1 * q.g1 * q.L * q.L / (24 * q.H1 * q.H1) - q.EA * q.alpha * (q.t2 - q.t1);
+    near(lhs, rhs, 1e-6, 'невязка');
+    eq(CL.stateEq({ EA:1.5e6, alpha:5e-6, L:50, g1:0.9, H1:600, t1:10, g2:0.9, t2:40 }) < 600, true, 'нагрев — тяжение падает');
+    return 'H = ' + H.toFixed(1) + ' Н';
+  });
+  t('Стрела и приведённый пролёт', function(){
+    near(CL.sag(1, 40, 200), 1, 1e-12, 'f = gL²/8H');
+    near(CL.rulingSpan([30, 40, 50]), Math.sqrt((27000 + 64000 + 125000) / 120), 1e-9, 'Lпр');
+    eq(CL.rulingSpan([]), null);
+    return 'Lпр(30, 40, 50) = ' + CL.rulingSpan([30, 40, 50]).toFixed(2) + ' м';
+  });
+  t('Подбор тяжения: определяющий режим загружен на 100 %', function(){
+    var l = CL.loads({ d_mm:10.5, mass_kg_km:90 }, { W0:650, bE:15, terrain:'A', kv:10, h:6, L:60, iceRegion:'II' });
+    var s = CL.solveSection({ EA:1.5e6, alpha:5e-6, T_max:2700 }, l, CL.regimes({ tMax:40, tMin:-25, tAvg:10 }), 60);
+    near(s.governing.ratio, 1, 1e-4, 'загрузка'); eq(s.ok, true);
+    s.regimes.forEach(function(x){ if (x.ratio > 1 + 1e-6) throw new Error('режим ' + x.name + ' превышен'); });
+    var s2 = CL.solveSection({ EA:1.5e6, alpha:5e-6, T_max:2700, H_install_avg:1500 }, l, CL.regimes({ tMax:40, tMin:-25, tAvg:10 }), 60);
+    eq(s2.ok, false, 'чрезмерное монтажное тяжение выявлено');
+    return 'H0 = ' + (s.H0 / 1000).toFixed(3) + ' кН';
+  });
+  t('Монтажная таблица: с ростом температуры стрела растёт', function(){
+    var l = CL.loads({ d_mm:10.5, mass_kg_km:90 }, { W0:650, bE:15, terrain:'A', kv:10, h:6, L:45, iceRegion:'II' });
+    var cab = { EA:1.5e6, alpha:5e-6, T_max:2700 };
+    var s = CL.solveSection(cab, l, CL.regimes({ tMax:40, tMin:-25, tAvg:10 }), 45);
+    var mt = CL.montageTable(cab, l, s, [40, 50], -25, 40, 5);
+    eq(mt.length, 14, 'строк'); eq(mt[0].sags[1] < mt[13].sags[1], true, 'рост стрелы');
+    eq(mt[0].sags[0] < mt[0].sags[1], true, 'длиннее пролёт — больше стрела');
+    return mt.length + ' строк, шаг 5 °C';
+  });
+  t('Габарит до земли и расстояние до провода в пролёте', function(){
+    var g = CL.groundClearance(5, 5, 1, 40); near(g.min, 4, 1e-9); near(g.x, 20, 1e-9);
+    var g2 = CL.groundClearance(8, 6, 0.5, 50); near(g2.min, 6.0, 1e-9, 'перепад: наименьший габарит у нижней опоры');
+    var dd = CL.spanDistance({ hA:7, hB:7, f:1.2 }, { hA:5.5, hB:5.5, f:0.6 }, 40); near(dd.min, 0.9, 1e-9);
+    return 'габарит 4,0 м; расстояние 0,9 м';
+  });
+  t('Свободные интервалы на опоре', function(){
+    var f = CL.freeIntervals({ topLimit:9, normWire:0.4, fixDist:0.3, hMinCable:5, items:[{ name:'СИП', h:7, kind:'wire' }, { name:'ОК-1', h:6, kind:'cable' }] });
+    eq(f.free.length, 2); near(f.free[0][0], 5); near(f.free[0][1], 5.7); near(f.free[1][0], 6.3); near(f.free[1][1], 6.6);
+    return '5,0–5,7 и 6,3–6,6 м';
+  });
+  t('Момент на промежуточную опору (ручной счёт)', function(){
+    /* 3×(5 Н/м × 40 м × 7 м) + 7,5 Н/м × 40 м × 5,5 м = 4200 + 1650 = 5850 Н·м;
+       стойка 0,2 × 8 м, тип A: Kw(4 м) = 1; Q = 1·650·0,7·1,6·1,8·1,3 = 1703,52 Н; M = Q·4 = 6814,08 */
+    var m = CL.poleMoment({ mark:'П', scheme:'промежуточная', m_adm:20, kState:1, windSpan:40, stand:{ width_m:0.2, height_m:8 } },
+      [{ name:'провод', h:7, pw:5, n:3 }, { name:'ОК', h:5.5, pw:7.5, n:1 }], { W0:650, terrain:'A' });
+    near(m.M, 5850 + 6814.08, 1e-6, 'M'); eq(m.ok, true); eq(m.tensioned, false);
+    var m2 = CL.poleMoment({ mark:'П', scheme:'промежуточная', m_adm:20, kState:0.8, windSpan:40, stand:{ width_m:0.2, height_m:8 } },
+      [{ name:'провод', h:7, pw:5, n:3 }], { W0:650, terrain:'A' });
+    near(m2.Madm, 16000, 1e-9, 'k = 0,8');
+    return 'M = ' + (m.M / 1000).toFixed(3) + ' кН·м';
+  });
+  t('Момент на угловую опору: 2·sin(α/2); без угла — блок', function(){
+    var m = CL.poleMoment({ scheme:'угловая', m_adm:20, angle:60, windSpan:40, stand:{ width_m:0.2, height_m:8 } }, [{ name:'ОК', h:6, pw:0, T:1000 }], { W0:650, terrain:'A' });
+    near(m.M - 6814.08 * (8 * 0.2 * 650 * 0.7 * 1.8 * 1.3 * 4 / 6814.08) , 1000 * 1 * 6, 1e-6, 'тяжение');
+    var m2 = CL.poleMoment({ scheme:'угловая', m_adm:20, windSpan:40, stand:{ width_m:0.2, height_m:8 } }, [{ name:'ОК', h:6, pw:0, T:1000 }], { W0:650, terrain:'A' });
+    eq(m2.ok, false); eq(m2.blocked.length, 1);
+    return '2·sin 30° = 1';
+  });
+  t('Нет геометрии стойки — результат не выпускается', function(){
+    var m = CL.poleMoment({ scheme:'промежуточная', m_adm:20, windSpan:40, stand:null }, [{ name:'ОК', h:6, pw:1 }], { W0:650, terrain:'A' });
+    eq(m.ok, false); eq(/стойки/.test(m.blocked[0]), true); return 'блок';
+  });
+  t('Длина кабеля с запасами и аварийным запасом', function(){
+    var r0 = CL.cableLength({ spansSum:1000, sagFactor:1.02, drops:20, reserves:30, splicing:6, emergencyShare:0.05 });
+    near(r0.value, 1020 + 56 + 50, 1e-9); return r0.value + ' м';
+  });
+}
+var DS = window.PDRD_DESIGN;
+if (DS && IM) {
+  var v25 = window.__v25;
+  t('Расчёт проекта: анкерные участки по неориентированному графу', function(){
+    var o = v25(function(o){
+      o.poles = [
+        { line:'Л', num:'1', kv:'10', mark:'А10-1', lat:45, lon:38, span:'50', nextRef:'2' },
+        { line:'Л', num:'2', kv:'10', mark:'П10-1', lat:45.00045, lon:38, span:'50', prevRef:'1', nextRef:'3' },
+        { line:'Л', num:'3', kv:'10', mark:'П10-1', lat:45.0009, lon:38, span:'', prevRef:'4' },
+        { line:'Л', num:'4', kv:'10', mark:'А10-1', lat:45.00135, lon:38, span:'50', nextRef:'3' }
+      ];
+    });
+    var r0 = IM.toProject(IM.fromV25Object(o), P.blank());
+    r0.project.poles.forEach(function(p){ p.fromReport.forEach(function(x){ x.prev = x.prev; }); });
+    /* пролёты «до пред.» V25 не хранит — восполним для графа */
+    r0.project.poles[2].fromReport[0].span_prev_m = 50;
+    var s = DS.sections(r0.project);
+    eq(s.length, 1, 'участков'); eq(s[0].spans.length, 3, 'пролётов'); near(s[0].Lr, 50, 1e-9);
+    return '1 участок из 3 пролётов, направления обхода разные';
+  });
+  t('Расчёт проекта: без исходных данных всё заблокировано, аварийные исключены', function(){
+    var r0 = IM.toProject(IM.fromV25Object(v25()), P.blank());
+    var res2 = DS.run(r0.project);
+    eq(res2.summary.ok, 0, 'обоснованных'); eq(res2.summary.excluded, 1, 'исключённых');
+    eq(Object.keys(res2.missing).length > 0, true, 'перечень данных');
+    return res2.summary.blocked + ' заблокировано';
   });
 }
 

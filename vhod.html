@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Исходные данные и входной контроль — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=0.4.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=0.5.0">
 <style>
 .drop{border:2px dashed var(--line);border-radius:8px;padding:18px;text-align:center;background:var(--sheet)}
 .drop.over{border-color:var(--blue);background:var(--blue-l)}
@@ -33,6 +33,7 @@
   <nav aria-label="Разделы">
     <a href="index.html">Комплект</a>
     <a class="on" href="vhod.html">Исходные данные</a>
+    <a href="raschet.html">Расчёты</a>
     <a href="shablony.html">Шаблоны</a>
     <a href="normy.html">Нормы</a>
     <a href="tests.html">Проверка ядра</a>
@@ -72,11 +73,11 @@
   </section>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="pdrd-core.js?v=0.4.0"></script>
-<script src="pdrd-norms.js?v=0.4.0"></script>
-<script src="pdrd-refs-v25.js?v=0.4.0"></script>
-<script src="pdrd-import.js?v=0.4.0"></script>
-<script src="pdrd-docx.js?v=0.4.0"></script>
+<script src="pdrd-core.js?v=0.5.0"></script>
+<script src="pdrd-norms.js?v=0.5.0"></script>
+<script src="pdrd-refs-v25.js?v=0.5.0"></script>
+<script src="pdrd-import.js?v=0.5.0"></script>
+<script src="pdrd-docx.js?v=0.5.0"></script>
 <script>
 (function(){
   var I = PDRD_IMPORT, $ = function(id){ return document.getElementById(id); };
@@ -199,6 +200,6 @@
   }
 })();
 </script>
-<script src="pdrd-profiles.js?v=0.4.0"></script>
+<script src="pdrd-profiles.js?v=0.5.0"></script>
 </body>
 </html>

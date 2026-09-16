@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Расчёты — PD_RD</title>
+<link rel="stylesheet" href="pdrd-ui.css?v=0.5.0">
+<style>
+.frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 14px}
+.frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+.frm input,.frm select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:15px;background:#fff}
+.frm .hint{font-size:12px;color:var(--muted);margin-top:3px}
+.frm .miss input{border-color:#E3B0B0;background:#FFF8F8}
+.tbl{overflow-x:auto;margin-top:8px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{border-bottom:1px solid var(--line-s);padding:6px 7px;text-align:left;vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:12.5px;white-space:nowrap}
+td input{width:100%;min-width:60px;padding:5px 6px;border:1px solid var(--line-s);border-radius:4px;font-size:14px}
+td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.st{font-size:11.5px;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.st.ok{background:var(--ok-bg);color:var(--ok)} .st.exceed{background:var(--bad-bg);color:var(--bad)}
+.st.blocked{background:var(--warn-bg);color:var(--warn)} .st.excluded{background:#E9ECEF;color:#495057}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:8px 0}
+.stat{border:1px solid var(--line-s);border-radius:6px;padding:10px 12px;background:#fff}
+.stat b{display:block;font-size:24px;font-family:var(--tech);line-height:1.1}
+.stat span{font-size:12.5px;color:var(--muted)}
+.nh th{text-align:right}.nh th:first-child{text-align:left}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 10px}
+.tabs button{border:1px solid var(--line-s);background:#fff;border-radius:999px;padding:6px 13px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--blue);color:#fff;border-color:var(--blue)}
+.trace{font-size:13px;background:var(--sheet);border:1px solid var(--line-s);border-radius:6px;padding:8px 10px;margin:6px 0}
+.trace div{padding:2px 0}
+small.r{display:block;color:var(--muted);font-size:12px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
+  <nav aria-label="Разделы">
+    <a href="index.html">Комплект</a>
+    <a href="vhod.html">Исходные данные</a>
+    <a class="on" href="raschet.html">Расчёты</a>
+    <a href="shablony.html">Шаблоны</a>
+    <a href="normy.html">Нормы</a>
+    <a href="tests.html">Проверка ядра</a>
+  </nav>
+</div></header>
+<main class="wrap">
+  <div id="noProj" class="panel" hidden><h2>Проект не загружен</h2><p class="sub">Сначала загрузите исходные данные на странице <a href="vhod.html">«Исходные данные»</a>.</p></div>
+
+  <div id="app" hidden>
+  <section class="panel">
+    <h2>Климатические условия</h2>
+    <p class="sub">Районы и тип местности — из отчёта по п. 13. Температуры — по СП 131.13330.2020 для ближайшей метеостанции с округлением до значений, кратных 5 °C (ПУЭ-7, п. 2.5.51).</p>
+    <div class="frm" id="fClimate"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Кабель</h2>
+    <p class="sub">Механические характеристики — только из паспорта изготовителя. Расчёт тяжений и стрел без них не выполняется.</p>
+    <div class="frm" id="fCable"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Провода ВЛ по классам напряжения</h2>
+    <p class="sub">Данные владельца ВЛ. Тяжение — нормативное максимальное; стрела — в режиме наибольшей стрелы. Для отдельной линии провода можно задать позднее в решениях по опорам.</p>
+    <div class="tbl"><table><thead><tr><th>Класс, кВ</th><th>Марка</th><th>Число</th><th>d, мм</th><th>Масса, кг/км</th><th>Высота подвеса, м</th><th>Тяжение, кН</th><th>Наиб. стрела, м</th></tr></thead><tbody id="tWires"></tbody></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>Опоры: стойки и несущая способность</h2>
+    <p class="sub">Размеры стоек нужны для ветровой нагрузки на опору (ПУЭ-7, пп. 2.5.59–2.5.63). Для анкерных, концевых и ответвительных опор с подкосами — допустимый момент конструкции в направлении тяжения по типовому проекту.</p>
+    <div class="tbl"><table><thead><tr><th>Стойка</th><th>Опор</th><th>Ширина по фасаду, м</th><th>Высота над землёй, м</th></tr></thead><tbody id="tStands"></tbody></table></div>
+    <div class="tbl"><table><thead><tr><th>Марка опоры</th><th>Схема</th><th>Типовой проект</th><th>Опор</th><th>Допустимый момент конструкции, кН·м</th></tr></thead><tbody id="tCap"></tbody></table></div>
+  </section>
+
+  <section class="panel">
+    <div class="btns"><button class="btn primary" id="bRun" type="button">Сохранить и рассчитать</button></div>
+    <div id="runMsg"></div>
+  </section>
+
+  <section class="panel" id="res" hidden>
+    <h2>Результаты</h2>
+    <p class="sub" id="resSub"></p>
+    <div class="stats" id="stats"></div>
+    <div id="missing"></div>
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div id="pane"></div>
+  </section>
+  </div>
+</main>
+<script src="pdrd-core.js?v=0.5.0"></script>
+<script src="pdrd-norms.js?v=0.5.0"></script>
+<script src="pdrd-refs-v25.js?v=0.5.0"></script>
+<script src="pdrd-calc.js?v=0.5.0"></script>
+<script src="pdrd-design.js?v=0.5.0"></script>
+<script>
+(function(){
+  var P = PDRD, C = PDRD_CALC, $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function nf(v, d){ return C.fmt(v, d); }
+  function numIn(v){ var n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : null; }
+  if (!P.hasProject() || !P.load().poles.length) { $('noProj').hidden = false; return; }
+  $('app').hidden = false;
+  var d = P.load();
+  d.designDefaults = d.designDefaults || {};
+  d.wiresByKv = d.wiresByKv || {};
+  d.stands = d.stands || {};
+  d.poleCapacity = d.poleCapacity || {};
+  var state = { res:null, tab:'poles', filter:'all', limit:100, sec:null };
+
+  function field(host, label, obj, key, opt){
+    opt = opt || {};
+    var w = el('div'); var id = 'f_' + key;
+    var l = el('label', '', label); l.htmlFor = id; w.appendChild(l);
+    var inp;
+    if (opt.options){ inp = el('select'); opt.options.forEach(function(o){ var op = el('option','',o[1]); op.value = o[0]; inp.appendChild(op); }); }
+    else { inp = el('input'); inp.type = opt.type || 'text'; if (opt.inputmode) inp.inputMode = opt.inputmode; }
+    inp.id = id;
+    var v = obj[key];
+    if (opt.type === 'checkbox') inp.checked = !!v; else inp.value = v === null || v === undefined ? '' : String(v).replace('.', ',');
+    inp.onchange = function(){
+      obj[key] = opt.type === 'checkbox' ? inp.checked : (opt.text ? inp.value.trim() : numIn(inp.value));
+      mark();
+    };
+    function mark(){ w.classList.toggle('miss', !!opt.req && (obj[key] === null || obj[key] === undefined || obj[key] === '')); }
+    mark();
+    w.appendChild(inp);
+    if (opt.hint) w.appendChild(el('div', 'hint', opt.hint));
+    host.appendChild(w);
+  }
+
+  function renderInputs(){
+    var c = d.climate;
+    var f = $('fClimate'); f.innerHTML = '';
+    field(f, 'Район по ветру', c, 'windRegion', { text:true, req:true, hint:'Табл. 2.5.1' });
+    field(f, 'Ветровое давление W0, Па', c, 'windPa', { req:true, inputmode:'decimal' });
+    field(f, 'Район по гололёду', c, 'iceRegion', { text:true, req:true, hint:'Табл. 2.5.3' });
+    field(f, 'Стенка гололёда bэ, мм', c, 'iceMm', { req:true, inputmode:'decimal' });
+    field(f, 'Тип местности', c, 'terrain', { text:true, options:[['',''],['A','A — открытая'],['B','B — застройка, лес'],['C','C — плотная застройка']], req:true, hint:'П. 2.5.6' });
+    field(f, 'Высшая температура, °C', c, 'tMax', { req:true, inputmode:'decimal' });
+    field(f, 'Низшая температура, °C', c, 'tMin', { req:true, inputmode:'decimal' });
+    field(f, 'Среднегодовая температура, °C', c, 'tAvg', { req:true, inputmode:'decimal' });
+    field(f, 'Высота местности, м', c, 'altitude', { inputmode:'decimal', hint:'Над уровнем моря; для температуры при гололёде' });
+    field(f, 'Климат подтверждён проектировщиком', c, 'confirmed', { type:'checkbox' });
+
+    var cb = d.cable, g = $('fCable'); g.innerHTML = '';
+    field(g, 'Марка', cb, 'mark', { text:true, req:true });
+    field(g, 'Диаметр, мм', cb, 'd_mm', { req:true, inputmode:'decimal' });
+    field(g, 'Масса, кг/км', cb, 'mass_kg_km', { req:true, inputmode:'decimal' });
+    field(g, 'Жёсткость EA, кН', cb, 'EA_kn', { req:true, inputmode:'decimal', hint:'Модуль упругости × площадь несущего элемента' });
+    field(g, 'ТКЛР α, ×10⁻⁶ 1/°C', cb, 'alpha_e6', { req:true, inputmode:'decimal' });
+    field(g, 'МДРН, кН', cb, 't_mdrn_kn', { req:true, inputmode:'decimal', hint:'Максимально допустимая растягивающая нагрузка; по отчёту допустимое тяжение — ' + nf(cb.t_allow_kn, 2) + ' кН' });
+    field(g, 'ЭДРН при tсг, кН', cb, 't_edrn_kn', { inputmode:'decimal', hint:'Эксплуатационная (если указана в паспорте)' });
+    field(g, 'Тяжение при tсг по проекту, кН', cb, 'h_install_kn', { inputmode:'decimal', hint:'Пусто — подбирается по наиболее нагруженному режиму' });
+    field(g, 'Высота подвеса кабеля, м', d.designDefaults, 'cableH', { req:true, inputmode:'decimal', hint:'По отчёту: ' + nf(cb.h_m, 1) + ' м. Проверяется габарит 5,0 м при наибольшей стреле' });
+
+    /* провода по классам */
+    var kvs = {}; d.lines.forEach(function(l){ if (l.kv !== null && l.kv !== undefined) kvs[String(l.kv).replace('.', ',')] = 1; });
+    var tb = $('tWires'); tb.innerHTML = '';
+    Object.keys(kvs).sort(function(a,b){ return parseFloat(a.replace(',','.')) - parseFloat(b.replace(',','.')); }).forEach(function(k){
+      var list = d.wiresByKv[k] = d.wiresByKv[k] && d.wiresByKv[k].length ? d.wiresByKv[k] : [{ mark: k === '0,4' ? 'СИП' : '', n:null, d_mm:null, mass_kg_km:null, h_m:null, T_kn:null, f_max_m:null }];
+      list.forEach(function(w){
+        var tr = el('tr'); tr.appendChild(el('td','', k));
+        [['mark',true],['n'],['d_mm'],['mass_kg_km'],['h_m'],['T_kn'],['f_max_m']].forEach(function(c2){
+          var td = el('td'), inp = el('input'); inp.value = w[c2[0]] === null || w[c2[0]] === undefined ? '' : String(w[c2[0]]).replace('.', ',');
+          if (!c2[1]) inp.inputMode = 'decimal';
+          inp.setAttribute('aria-label', c2[0] + ' ' + k + ' кВ');
+          inp.onchange = function(){ w[c2[0]] = c2[1] ? inp.value.trim() : numIn(inp.value); };
+          td.appendChild(inp); tr.appendChild(td);
+        });
+        tb.appendChild(tr);
+      });
+    });
+
+    /* стойки и марки */
+    var R = PDRD_REFS_V25, st = {}, mk = {};
+    d.poles.forEach(function(p){ var ref = R.poleByMark(p.mark); if (!ref) return; st[ref.st] = (st[ref.st]||0) + 1;
+      if (/анкер|концев|ответвит/.test(ref.sch)) (mk[p.mark] = mk[p.mark] || { ref:ref, n:0 }).n++; });
+    var ts = $('tStands'); ts.innerHTML = '';
+    Object.keys(st).forEach(function(s){
+      var o = d.stands[s] = d.stands[s] || { width_m:null, height_m:null };
+      var tr = el('tr'); tr.appendChild(el('td','',s)); tr.appendChild(el('td','n', String(st[s])));
+      ['width_m','height_m'].forEach(function(k){ var td = el('td'), i = el('input'); i.inputMode = 'decimal'; i.value = o[k] === null ? '' : String(o[k]).replace('.', ','); i.onchange = function(){ o[k] = numIn(i.value); }; td.appendChild(i); tr.appendChild(td); });
+      ts.appendChild(tr);
+    });
+    var tc = $('tCap'); tc.innerHTML = '';
+    Object.keys(mk).forEach(function(m){
+      var o = d.poleCapacity[m] = d.poleCapacity[m] || { m_cap_knm:null };
+      var tr = el('tr'); [m, mk[m].ref.sch, mk[m].ref.proj].forEach(function(x){ tr.appendChild(el('td','',x)); }); tr.appendChild(el('td','n', String(mk[m].n)));
+      var td = el('td'), i = el('input'); i.inputMode = 'decimal'; i.value = o.m_cap_knm === null ? '' : String(o.m_cap_knm).replace('.', ','); i.onchange = function(){ o.m_cap_knm = numIn(i.value); }; td.appendChild(i); tr.appendChild(td);
+      tc.appendChild(tr);
+    });
+  }
+
+  function run(){
+    /* пустые строки проводов не сохраняем как данные */
+    Object.keys(d.wiresByKv).forEach(function(k){ d.wiresByKv[k] = d.wiresByKv[k].filter(function(w){ return w.d_mm !== null || w.h_m !== null || w.T_kn !== null || w.mass_kg_km !== null; }); if (!d.wiresByKv[k].length) delete d.wiresByKv[k]; });
+    var t0 = performance.now();
+    var res = PDRD_DESIGN.run(d);
+    state.res = res;
+    d.calcResult = { at: res.at, app: P.VERSION, summary: res.summary,
+      poles: res.poles.map(function(p){ return { id:p.id, status:p.status, reasons:p.reasons, warns:p.warns, M:p.M, Madm:p.Madm }; }),
+      sections: res.sections.map(function(s){ return { id:s.id, line:s.line, status:s.status, Lr:s.Lr, length:s.length, H0:s.solution ? s.solution.H0 : null, fVert:s.fVert, reasons:s.reasons }; }),
+      spans: res.spans.map(function(s){ return { section:s.section, line:s.line, from:s.from, to:s.to, L:s.L, status:s.status, clearance:s.clearance, wireDist:s.wireDist, fmax:s.fmax, reasons:s.reasons }; }),
+      missing: res.missing };
+    P.replaceAll(d); d = P.load();
+    var m = $('runMsg'); m.innerHTML = '';
+    m.appendChild(el('div', 'msg ok', 'Сохранено и рассчитано за ' + Math.round(performance.now() - t0) + ' мс.'));
+    renderInputs();
+    showRes();
+  }
+
+  function showRes(){
+    var r = state.res; $('res').hidden = false;
+    $('resSub').textContent = 'Расчёт от ' + new Date(r.at).toLocaleString('ru-RU') + '. Опор: ' + r.poles.length + ', анкерных участков: ' + r.sections.length + ', пролётов: ' + r.spans.length + '.';
+    var st = $('stats'); st.innerHTML = '';
+    [['ok','размещение обосновано'],['exceed','нормы не выполнены'],['blocked','нет исходных данных'],['excluded','исключены']].forEach(function(x){
+      var c = el('div','stat'); var b = el('b','', String(r.summary[x[0]] || 0)); b.style.color = { ok:'var(--ok)', exceed:'var(--bad)', blocked:'var(--warn)', excluded:'var(--muted)' }[x[0]];
+      c.appendChild(b); c.appendChild(el('span','', 'опор: ' + x[1])); st.appendChild(c);
+    });
+    var mh = $('missing'); mh.innerHTML = '';
+    var keys = Object.keys(r.missing);
+    if (keys.length){
+      var box = el('div','msg warn'); box.appendChild(el('b','','Для завершения расчёта нужны данные:'));
+      var ul = el('ul','gaps'); keys.forEach(function(k){ var n = r.missing[k].length; ul.appendChild(el('li','', k + (n > 1 ? ' — ' + n + ' поз.' : ''))); });
+      box.appendChild(ul); mh.appendChild(box);
+    }
+    if (r.inputs.warn.length) mh.appendChild(el('div','msg warn', r.inputs.warn.join('. ') + '.'));
+    var tabs = $('tabs'); tabs.innerHTML = '';
+    [['poles','Опоры'],['spans','Пролёты'],['sections','Анкерные участки'],['loads','Нагрузки на кабель']].forEach(function(t){
+      var b = el('button','', t[1]); b.type = 'button'; b.setAttribute('role','tab'); b.setAttribute('aria-selected', state.tab === t[0]);
+      b.onclick = function(){ state.tab = t[0]; state.limit = 100; showRes(); }; tabs.appendChild(b);
+    });
+    ({ poles: paneP, spans: paneS, sections: paneSec, loads: paneL })[state.tab]();
+  }
+
+  var ST = { ok:'обосновано', exceed:'не выполнено', blocked:'нет данных', excluded:'исключена' };
+  function filterBar(host, list){
+    var f = el('div','tabs');
+    ['all','exceed','blocked','ok','excluded'].forEach(function(k){
+      var n = k === 'all' ? list.length : list.filter(function(x){ return x.status === k; }).length;
+      if (!n && k !== 'all') return;
+      var b = el('button','', (k === 'all' ? 'Все' : ST[k]) + ' (' + n + ')'); b.type='button'; b.setAttribute('aria-selected', state.filter === k);
+      b.onclick = function(){ state.filter = k; state.limit = 100; showRes(); }; f.appendChild(b);
+    });
+    host.appendChild(f);
+  }
+  function table(host, head, rows, render, cls){
+    var w = el('div','tbl' + (cls ? ' ' + cls : '')), t = el('table'), th = el('tr');
+    head.forEach(function(h){ th.appendChild(el('th','',h)); });
+    var thead = el('thead'); thead.appendChild(th); t.appendChild(thead);
+    var tb = el('tbody');
+    rows.slice(0, state.limit).forEach(function(x){ tb.appendChild(render(x)); });
+    t.appendChild(tb); w.appendChild(t); host.appendChild(w);
+    if (rows.length > state.limit){ var b = el('button','btn','Показать ещё (' + (rows.length - state.limit) + ')'); b.type='button'; b.onclick = function(){ state.limit += 200; showRes(); }; host.appendChild(b); }
+  }
+  function stTag(s){ return el('span','st ' + s, ST[s]); }
+  function paneP(){
+    var h = $('pane'); h.innerHTML = '';
+    var list = state.res.poles; filterBar(h, list);
+    var rows = list.filter(function(x){ return state.filter === 'all' || x.status === state.filter; });
+    table(h, ['№ опоры','Марка','кВ','Линия','M / Mдоп, кН·м','Статус','Причины и примечания'], rows, function(x){
+      var tr = el('tr');
+      tr.appendChild(el('td','', x.nums)); tr.appendChild(el('td','', x.mark || '—')); tr.appendChild(el('td','n', nf(x.kv, 1)));
+      tr.appendChild(el('td','', (x.lines[0] || '').slice(0, 40) + (x.lines.length > 1 ? ' (+' + (x.lines.length - 1) + ')' : '')));
+      tr.appendChild(el('td','n', x.M !== undefined ? nf(x.M/1000, 2) + ' / ' + nf(x.Madm/1000, 2) : '—'));
+      var s = el('td'); s.appendChild(stTag(x.status)); tr.appendChild(s);
+      var c = el('td'); x.reasons.forEach(function(t){ c.appendChild(el('small','r', t)); }); x.warns.forEach(function(t){ var e = el('small','r', t); e.style.color = 'var(--warn)'; c.appendChild(e); });
+      if (x.trace){ var det = el('details'); det.appendChild(el('summary','', 'Расчёт')); var tr2 = el('div','trace'); x.trace.forEach(function(t){ tr2.appendChild(el('div','',t)); }); det.appendChild(tr2); c.appendChild(det); }
+      tr.appendChild(c); return tr;
+    });
+  }
+  function paneS(){
+    var h = $('pane'); h.innerHTML = '';
+    var list = state.res.spans; filterBar(h, list);
+    var rows = list.filter(function(x){ return state.filter === 'all' || x.status === state.filter; });
+    table(h, ['Участок','Пролёт','L, м','Габ. пролёт','Наиб. стрела, м','До земли, м','До провода, м','Статус','Причины'], rows, function(x){
+      var tr = el('tr');
+      [x.section, x.from + ' — ' + x.to].forEach(function(v){ tr.appendChild(el('td','',v)); });
+      [nf(x.L,1), x.gab ? nf(x.gab,0) + (x.overGab ? ' ▲' : '') : '—', nf(x.fmax,2), nf(x.clearance,2), x.wireDist !== undefined ? nf(x.wireDist,2) : '—'].forEach(function(v){ tr.appendChild(el('td','n',v)); });
+      var s = el('td'); s.appendChild(stTag(x.status)); tr.appendChild(s);
+      var c = el('td'); x.reasons.forEach(function(t){ c.appendChild(el('small','r',t)); }); tr.appendChild(c);
+      return tr;
+    });
+  }
+  function paneSec(){
+    var h = $('pane'); h.innerHTML = '';
+    var list = state.res.sections;
+    filterBar(h, list);
+    var rows = list.filter(function(x){ return state.filter === 'all' || x.status === state.filter; });
+    table(h, ['Участок','Линия','кВ','Пролётов','Длина, м','Lпр, м','H при tсг, кН','Статус',''], rows, function(x){
+      var tr = el('tr');
+      tr.appendChild(el('td','',x.id)); tr.appendChild(el('td','',x.line.slice(0,40)));
+      [nf(x.kv,1), String(x.spans), nf(x.length,0), nf(x.Lr,1), x.solution ? nf(x.solution.H0/1000,3) : '—'].forEach(function(v){ tr.appendChild(el('td','n',v)); });
+      var s = el('td'); s.appendChild(stTag(x.status)); tr.appendChild(s);
+      var c = el('td');
+      if (x.solution){ var b = el('button','btn','Монтажная таблица'); b.type='button'; b.onclick = function(){ montage(x); }; c.appendChild(b); }
+      else x.reasons.forEach(function(t){ c.appendChild(el('small','r',t)); });
+      tr.appendChild(c); return tr;
+    });
+    var m = el('div'); m.id = 'montage'; h.appendChild(m);
+  }
+  function montage(x){
+    var host = $('montage'); host.innerHTML = '';
+    var sec = PDRD_DESIGN.sections(d).filter(function(s){ return s.id === x.id; })[0];
+    var inp = state.res.inputs;
+    host.appendChild(el('h3','', x.id + ': ' + x.line));
+    var tr = el('div','trace'); x.solution.trace.forEach(function(t){ tr.appendChild(el('div','',t)); }); host.appendChild(tr);
+    table(host, ['Режим','t, °C','Нагрузка, Н/м','H, кН','T, кН','Стрела в Lпр, м','Загрузка'], x.solution.regimes, function(g){
+      var r2 = el('tr'); r2.appendChild(el('td','',g.name + ' (' + g.ref + ')'));
+      [nf(g.t,0), nf(g.g,3), nf(g.H/1000,3), nf(g.T/1000,3), nf(g.f,2), nf(g.ratio*100,1) + ' %'].forEach(function(v){ r2.appendChild(el('td','n',v)); });
+      return r2;
+    }, 'nh');
+    var spans = sec.spans.map(function(s){ return s.L; });
+    var mt = C.montageTable(inp.cab, x.loads, x.solution, spans, inp.tMin, inp.tMax, 5);
+    host.appendChild(el('h3','', 'Монтажная таблица: стрелы провеса по пролётам, м'));
+    var head = ['t, °C','H, кН'].concat(sec.spans.map(function(s){ return s.from.rec.num + '–' + s.to.rec.num + ' (' + nf(s.L,0) + ' м)'; }));
+    var save = state.limit; state.limit = 1000;
+    table(host, head, mt, function(row){
+      var r3 = el('tr'); r3.appendChild(el('td','n',nf(row.t,0))); r3.appendChild(el('td','n',nf(row.H/1000,3)));
+      row.sags.forEach(function(f){ r3.appendChild(el('td','n',nf(f,2))); });
+      return r3;
+    }, 'nh');
+    state.limit = save;
+    host.scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+  function paneL(){
+    var h = $('pane'); h.innerHTML = '';
+    var s = state.res.sections.filter(function(x){ return x.loads; });
+    if (!s.length){ h.appendChild(el('p','sub','Нагрузки не рассчитаны — не хватает исходных данных.')); return; }
+    var byKv = {}; s.forEach(function(x){ if (!byKv[x.kv]) byKv[x.kv] = x; });
+    Object.keys(byKv).forEach(function(k){
+      var x = byKv[k];
+      h.appendChild(el('h3','', 'ВЛ ' + nf(+k,1) + ' кВ, пример — ' + x.id + ' (Lпр ' + nf(x.Lr,1) + ' м)'));
+      var tr = el('div','trace'); x.loads.trace.forEach(function(t){ tr.appendChild(el('div','',t)); }); h.appendChild(tr);
+    });
+  }
+
+  renderInputs();
+  $('bRun').onclick = run;
+  if (d.calcResult) { var m = $('runMsg'); m.appendChild(el('div','msg ok','Последний расчёт: ' + new Date(d.calcResult.at).toLocaleString('ru-RU') + '. Нажмите «Сохранить и рассчитать», чтобы обновить.')); }
+})();
+</script>
+</body>
+</html>
