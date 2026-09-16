@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Решения по опорам — PD_RD</title>
+<link rel="stylesheet" href="pdrd-ui.css?v=0.6.0">
+<style>
+.frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px}
+.frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+.frm input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:15px}
+.frm .hint{font-size:12px;color:var(--muted);margin-top:3px}
+.tbl{overflow-x:auto;margin-top:8px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{border-bottom:1px solid var(--line-s);padding:6px 7px;text-align:left;vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:12.5px;white-space:nowrap}
+td select,td input[type=text]{padding:5px 6px;border:1px solid var(--line-s);border-radius:4px;font-size:13.5px;max-width:100%}
+td input.h{width:70px}
+td.n{text-align:right;white-space:nowrap}
+tr.man td:first-child{box-shadow:inset 3px 0 0 var(--blue)}
+.st{font-size:11.5px;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.st.ok{background:var(--ok-bg);color:var(--ok)} .st.exceed{background:var(--bad-bg);color:var(--bad)}
+.st.blocked{background:var(--warn-bg);color:var(--warn)} .st.excluded{background:#E9ECEF;color:#495057}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:8px 0}
+.stat{border:1px solid var(--line-s);border-radius:6px;padding:10px 12px;background:#fff}
+.stat b{display:block;font-size:24px;font-family:var(--tech);line-height:1.1}
+.stat span{font-size:12.5px;color:var(--muted)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 10px}
+.tabs button{border:1px solid var(--line-s);background:#fff;border-radius:999px;padding:6px 13px;cursor:pointer}
+.tabs button[aria-pressed="true"]{background:var(--blue);color:#fff;border-color:var(--blue)}
+small.r{display:block;color:var(--muted);font-size:12px}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px;margin:8px 0}
+.item{display:grid;grid-template-columns:auto 1fr;gap:10px;padding:5px 0;font-size:14px;border-bottom:1px solid var(--line-s)}
+.lv{font-size:11.5px;padding:2px 8px;border-radius:999px;white-space:nowrap;height:fit-content}
+.lv.stop{background:var(--bad-bg);color:var(--bad)} .lv.warn{background:var(--warn-bg);color:var(--warn)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
+  <nav aria-label="Разделы">
+    <a href="index.html">Комплект</a>
+    <a href="vhod.html">Исходные данные</a>
+    <a href="raschet.html">Расчёты</a>
+    <a class="on" href="resheniya.html">Решения</a>
+    <a href="shablony.html">Шаблоны</a>
+    <a href="normy.html">Нормы</a>
+    <a href="tests.html">Проверка ядра</a>
+  </nav>
+</div></header>
+<main class="wrap">
+  <div id="noProj" class="panel" hidden><h2>Проект не загружен</h2><p class="sub">Сначала загрузите исходные данные на странице <a href="vhod.html">«Исходные данные»</a> и выполните <a href="raschet.html">расчёт</a>.</p></div>
+  <div id="app" hidden>
+  <section class="panel">
+    <h2>Параметры трассы</h2>
+    <p class="sub" id="profNote"></p>
+    <div class="frm" id="fPar"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Линии в трассе кабеля</h2>
+    <p class="sub">Отключите линии, по которым кабель не прокладывается: опоры таких линий получат решение «обход».</p>
+    <details><summary id="linesSum">Список линий</summary>
+    <div class="tbl"><table><thead><tr><th>Кабель</th><th>Линия</th><th>кВ</th><th>Опор</th></tr></thead><tbody id="tLines"></tbody></table></div>
+    </details>
+  </section>
+
+  <section class="panel">
+    <h2>Решения</h2>
+    <p class="sub">Предложение строится по результатам входного контроля и расчёта. Решения, изменённые вручную, помечены синей чертой и при повторном предложении не меняются.</p>
+    <label class="chk"><input type="checkbox" id="cOver"> Перезаписать и ручные решения</label>
+    <div class="btns">
+      <button class="btn primary" id="bProp" type="button">Предложить решения</button>
+      <button class="btn" id="bSave" type="button">Сохранить</button>
+    </div>
+    <div id="msg"></div>
+    <div class="stats" id="stats"></div>
+    <div id="checks"></div>
+    <div class="tabs" id="flt" role="group" aria-label="Фильтр"></div>
+    <div id="pane"></div>
+  </section>
+  </div>
+</main>
+<script src="pdrd-core.js?v=0.6.0"></script>
+<script src="pdrd-norms.js?v=0.6.0"></script>
+<script src="pdrd-profiles.js?v=0.6.0"></script>
+<script src="pdrd-refs-v25.js?v=0.6.0"></script>
+<script src="pdrd-calc.js?v=0.6.0"></script>
+<script src="pdrd-design.js?v=0.6.0"></script>
+<script src="pdrd-decide.js?v=0.6.0"></script>
+<script>
+(function(){
+  var P = PDRD, X = PDRD_DECIDE, C = PDRD_CALC, $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function numIn(v){ var n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : null; }
+  if (!P.hasProject() || !P.load().poles.length) { $('noProj').hidden = false; return; }
+  $('app').hidden = false;
+  var d = P.load(); d.decideParams = d.decideParams || {};
+  var state = { filter:'all', limit:100, info:null };
+  var ST = { ok:'обосновано', exceed:'не выполнено', blocked:'нет данных', excluded:'исключена' };
+
+  function params(){
+    var prof = PDRD_PROFILES.get(d.profile.operator), pp = prof.params || {};
+    $('profNote').textContent = 'Профиль: ' + prof.title + '. ' + (pp.note || 'Значения профиля подставляются, если поле пусто.');
+    var f = $('fPar'); f.innerHTML = '';
+    var o = d.decideParams;
+    [['buildLength_m','Строительная длина кабеля, м','Из паспорта/заказа' + (pp.minBuildLength_m ? '; профиль: не менее ' + pp.minBuildLength_m + ' м' : '')],
+     ['reserveT_m','Технологический запас у муфты, м', pp.reserveT_m ? 'Профиль: не менее ' + pp.reserveT_m + ' м' : 'Профиль не устанавливает — задать по технической политике оператора'],
+     ['emergencyShare','Аварийный запас, доля протяжённости', pp.emergencyShare ? 'Профиль: ' + pp.emergencyShare : 'Профиль не устанавливает'],
+     ['dampersFromSpan_m','Гасители вибрации — с пролёта, м','По паспорту кабеля и СО 34.20.265-2005'],
+     ['minGap_m','Зазор от границы интервала, м','Запас при выборе высоты подвеса, по умолчанию 0,05']
+    ].forEach(function(x){
+      var w = el('div'), l = el('label','',x[1]), i = el('input'); i.id = 'p_' + x[0]; l.htmlFor = i.id; i.inputMode = 'decimal';
+      i.value = o[x[0]] === undefined || o[x[0]] === null ? '' : String(o[x[0]]).replace('.', ',');
+      i.placeholder = pp[x[0]] !== undefined && pp[x[0]] !== null ? String(pp[x[0]]).replace('.', ',') : '';
+      i.onchange = function(){ o[x[0]] = numIn(i.value); };
+      w.appendChild(l); w.appendChild(i); w.appendChild(el('div','hint',x[2])); f.appendChild(w);
+    });
+  }
+
+  function lines(){
+    var cnt = {}; d.poles.forEach(function(p){ (p.lines||[]).forEach(function(l){ cnt[l.lineId] = (cnt[l.lineId]||0) + 1; }); });
+    var tb = $('tLines'); tb.innerHTML = '';
+    $('linesSum').textContent = 'Список линий (' + d.lines.length + '; в трассе — ' + d.lines.filter(function(l){ return l.cable !== false; }).length + ')';
+    d.lines.forEach(function(l){
+      var tr = el('tr'), td = el('td'), c = el('input'); c.type = 'checkbox'; c.checked = l.cable !== false;
+      c.setAttribute('aria-label', 'Кабель по линии ' + l.name);
+      c.onchange = function(){ l.cable = c.checked; };
+      td.appendChild(c); tr.appendChild(td);
+      tr.appendChild(el('td','',l.name)); tr.appendChild(el('td','n',C.fmt(l.kv,1))); tr.appendChild(el('td','n',String(cnt[l.id]||0)));
+      tb.appendChild(tr);
+    });
+  }
+
+  function refresh(){
+    state.info = X.poleInfo(d);
+    var t = X.totals(d), st = $('stats'); st.innerHTML = '';
+    [[t.place,'размещать'],[t.recheck,'после поверочного расчёта'],[t.extra,'промежуточная опора (Е.1)'],[t.after,'после восстановления'],[t.bypass,'обход'],[t.sleeves,'муфт и запасов'],[t.dampers,'опор с гасителями']]
+      .forEach(function(x){ var c = el('div','stat'); c.appendChild(el('b','',String(x[0]||0))); c.appendChild(el('span','',x[1])); st.appendChild(c); });
+    var ch = X.check(d), host = $('checks'); host.innerHTML = '';
+    if (ch.length){
+      var det = el('details'); det.open = ch.filter(function(x){ return x.lv==='stop'; }).length < 30;
+      det.appendChild(el('summary','', 'Проверка решений: блокирующих — ' + ch.filter(function(x){ return x.lv==='stop'; }).length + ', предупреждений — ' + ch.filter(function(x){ return x.lv==='warn'; }).length));
+      ch.slice(0, 200).forEach(function(x){ var it = el('div','item'); it.appendChild(el('span','lv '+x.lv, x.lv==='stop'?'блокирует':'учесть')); var tx = el('div','', x.where + ': ' + x.text); if (x.ref) tx.appendChild(el('small','r', x.ref)); it.appendChild(tx); det.appendChild(it); });
+      host.appendChild(det);
+    } else host.appendChild(el('div','msg ok','Нарушений в решениях нет.'));
+    table();
+  }
+
+  var FL = [['all','Все'],['fork','Развилки'],['sleeve','Муфты'],['manual','Изменены вручную'],['after','После восстановления'],['nodec','Без решения']];
+  function pass(p){
+    var x = p.design || {}, inf = state.info[p.id];
+    switch(state.filter){
+      case 'fork': return ['extra','recheck'].indexOf(x.decision) >= 0 || inf.overGab;
+      case 'sleeve': return !!x.sleeve;
+      case 'manual': return x.by === 'проектировщик';
+      case 'after': return x.decision === 'after';
+      case 'nodec': return !x.decision;
+      default: return true;
+    }
+  }
+  function table(){
+    var f = $('flt'); f.innerHTML = '';
+    FL.forEach(function(k){
+      var n = d.poles.filter(function(p){ var s = state.filter; state.filter = k[0]; var r = pass(p); state.filter = s; return r; }).length;
+      var b = el('button','', k[1] + ' (' + n + ')'); b.type = 'button'; b.setAttribute('aria-pressed', state.filter === k[0]);
+      b.onclick = function(){ state.filter = k[0]; state.limit = 100; table(); }; f.appendChild(b);
+    });
+    var rows = d.poles.filter(pass), host = $('pane'); host.innerHTML = '';
+    var w = el('div','tbl'), t = el('table');
+    t.innerHTML = '<thead><tr><th>№ опоры</th><th>Марка / схема</th><th>Расчёт</th><th>Решение</th><th>Высота, м</th><th>Узел</th><th>Муфта</th><th>Запас, м</th><th>Обоснование</th></tr></thead>';
+    var tb = el('tbody');
+    rows.slice(0, state.limit).forEach(function(p){
+      var x = p.design = p.design || {}, inf = state.info[p.id];
+      var tr = el('tr', x.by === 'проектировщик' ? 'man' : '');
+      function manual(){ x.by = 'проектировщик'; tr.className = 'man'; }
+      var c0 = el('td','', (p.lines||[]).map(function(l){ return l.num; }).join(' / ')); c0.appendChild(el('small','r', ((p.lines[0]||{}).lineId||'').slice(0,34) + (p.lines.length > 1 ? ' (+' + (p.lines.length-1) + ')' : ''))); tr.appendChild(c0);
+      var c1 = el('td','', p.mark || '—'); c1.appendChild(el('small','r', inf.scheme + (inf.overGab ? ' · пролёт > габаритного' : ''))); tr.appendChild(c1);
+      var c2 = el('td'); if (inf.calc) c2.appendChild(el('span','st '+inf.calc.status, ST[inf.calc.status])); else c2.textContent = '—'; tr.appendChild(c2);
+      var c3 = el('td'), s = el('select'); s.setAttribute('aria-label','Решение');
+      s.appendChild(el('option','','—'));
+      X.DECISIONS.forEach(function(o){ var op = el('option','',o.title); op.value = o.id; if (x.decision === o.id) op.selected = true; s.appendChild(op); });
+      s.onchange = function(){ x.decision = s.value; manual(); }; c3.appendChild(s); tr.appendChild(c3);
+      var c4 = el('td'), h = el('input','h'); h.type = 'text'; h.inputMode = 'decimal'; h.value = x.h_m === null || x.h_m === undefined ? '' : String(x.h_m).replace('.', ',');
+      h.setAttribute('aria-label','Высота подвеса'); h.onchange = function(){ x.h_m = numIn(h.value); manual(); }; c4.appendChild(h);
+      if (x.hWindow && x.hWindow.length) c4.appendChild(el('small','r', x.hWindow.map(function(iv){ return C.fmt(iv[0],2) + '…' + C.fmt(iv[1],2); }).join('; ')));
+      tr.appendChild(c4);
+      var c5 = el('td'), ns = el('select'); ns.setAttribute('aria-label','Узел крепления');
+      Object.keys(X.NODES).forEach(function(k){ var op = el('option','',k); op.value = k; op.title = X.NODES[k]; if (x.node === k) op.selected = true; ns.appendChild(op); });
+      ns.onchange = function(){ x.node = ns.value; manual(); }; c5.appendChild(ns); tr.appendChild(c5);
+      var c6 = el('td'), sc = el('input'); sc.type = 'checkbox'; sc.checked = !!x.sleeve; sc.setAttribute('aria-label','Муфта');
+      sc.onchange = function(){ x.sleeve = sc.checked; if (sc.checked && !x.sleeveType) x.sleeveType = 'прямая'; manual(); }; c6.appendChild(sc);
+      if (x.sleeve && x.sleeveType) c6.appendChild(el('small','r', x.sleeveType)); tr.appendChild(c6);
+      var c7 = el('td'), rv = el('input','h'); rv.type = 'text'; rv.inputMode = 'decimal'; rv.value = x.reserve_m === null || x.reserve_m === undefined ? '' : String(x.reserve_m).replace('.', ',');
+      rv.setAttribute('aria-label','Запас'); rv.onchange = function(){ x.reserve_m = numIn(rv.value); manual(); }; c7.appendChild(rv); tr.appendChild(c7);
+      var c8 = el('td'); (x.why || []).forEach(function(w2){ c8.appendChild(el('small','r', w2)); }); if (x.dampers) c8.appendChild(el('small','r','гасители вибрации')); tr.appendChild(c8);
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb); w.appendChild(t); host.appendChild(w);
+    if (rows.length > state.limit){ var b = el('button','btn','Показать ещё (' + (rows.length - state.limit) + ')'); b.type='button'; b.onclick = function(){ state.limit += 200; table(); }; host.appendChild(b); }
+    if (!rows.length) host.appendChild(el('p','sub','Нет опор с таким признаком.'));
+  }
+
+  function msg(cls, t){ var m = $('msg'); m.innerHTML = ''; m.appendChild(el('div','msg '+cls,t)); }
+  $('bProp').onclick = function(){
+    if (!d.calcResult) msg('warn','Расчёт ещё не выполнен — решения строятся только по входному контролю. Выполните расчёт на странице «Расчёты».');
+    var r = X.propose(d, { overwrite: $('cOver').checked });
+    P.replaceAll(d); d = P.load();
+    if (d.calcResult) msg('ok','Предложено решений: ' + r.changed + '; ручных сохранено: ' + r.kept + '.');
+    refresh();
+  };
+  $('bSave').onclick = function(){ P.replaceAll(d); d = P.load(); msg('ok','Решения сохранены.'); refresh(); };
+
+  params(); lines(); refresh();
+})();
+</script>
+</body>
+</html>

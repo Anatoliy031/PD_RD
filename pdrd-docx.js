@@ -326,6 +326,45 @@ function dataFromProject(d, tpl) {
     blocks['ВЫВОД_ПО_ОПОРАМ'] = ['По результатам расчёта (программа PD_RD ' + (cr.app || '') + ', ' + ru(cr.at) + '): размещение обосновано на ' + sm.ok + ' опорах; нормы не выполняются на ' + sm.exceed + ' опорах; для ' + sm.blocked + ' опор расчёт не завершён из-за отсутствия исходных данных; ' + sm.excluded + ' опор исключены из размещения по результатам обследования.' +
       (sm.exceed || sm.blocked ? ' Выпуск проектной документации допускается после устранения несоответствий и получения недостающих данных.' : '')];
   }
+  var X = global.PDRD_DECIDE;
+  if (X && d.poles.some(function (p) { return p.design && p.design.decision; })) {
+    var g2 = function (v) { return v === null || v === undefined ? '—' : String(v).replace('.', ','); };
+    var placed = d.poles.filter(function (p) { return p.design && p.design.decision; });
+    /* Ведомость опор — колонки совместимы с листом осмотра ТТ № 282р */
+    tables['ОПОРЫ'] = { caption: 'Таблица — Ведомость опор',
+      cols: [{ t: '№', w: 9 }, { t: 'Линия', w: 44 }, { t: 'Опора', w: 14 }, { t: 'Марка', w: 15 }, { t: 'кВ', w: 9 }, { t: 'Состояние', w: 22 },
+             { t: 'Решение', w: 26 }, { t: 'h, м', w: 11 }, { t: 'Узел', w: 10 }, { t: 'Муфта, запас', w: 15 }],
+      rows: placed.map(function (p, i) {
+        var x = p.design;
+        return [String(i + 1), (p.lines || []).map(function (l) { return l.lineId; }).join('; '), (p.lines || []).map(function (l) { return l.num; }).join(' / '),
+                p.mark, g2(p.kv), p.state || '', X.title(x.decision, true), g2(x.h_m), x.node || '', x.sleeve ? (x.sleeveType || 'муфта') + ', ' + g2(x.reserve_m) + ' м' : '—'];
+      }) };
+    tables['ОПОРЫ_СВОДКА'] = (function () {
+      var by = {};
+      d.poles.forEach(function (p) { var k = p.mark || '—'; by[k] = by[k] || { n: 0, place: 0 }; by[k].n++; if (p.design && ['place', 'recheck'].indexOf(p.design.decision) >= 0) by[k].place++; });
+      var RF = global.PDRD_REFS_V25;
+      return { caption: 'Таблица — Опоры воздушных линий', cols: [{ t: 'Марка', w: 25 }, { t: 'Назначение', w: 50 }, { t: 'Стойка / типовой проект', w: 55 }, { t: 'Всего', w: 20 }, { t: 'С размещением кабеля', w: 25 }],
+        rows: Object.keys(by).sort().map(function (k) { var ref = RF ? RF.poleByMark(k) : null; return [k, ref ? ref.type : '—', ref ? ref.proj_full : '—', String(by[k].n), String(by[k].place)]; }) };
+    })();
+    var sl = placed.filter(function (p) { return p.design.sleeve; });
+    tables['МУФТЫ'] = { caption: 'Таблица — Муфты, шкафы и запасы кабеля',
+      cols: [{ t: '№', w: 10 }, { t: 'Опора', w: 30 }, { t: 'Линия', w: 60 }, { t: 'Тип', w: 30 }, { t: 'Запас, м', w: 20 }, { t: 'Основание', w: 25 }],
+      rows: sl.length ? sl.map(function (p, i) { return [String(i + 1), (p.lines || []).map(function (l) { return l.num; }).join(' / ') + ' (' + p.mark + ')', ((p.lines || [])[0] || {}).lineId || '', p.design.sleeveType || 'муфта', g2(p.design.reserve_m), (p.design.why || []).slice(-1)[0] || '']; }) : [['—', 'Муфты не предусмотрены', '', '', '', '']] };
+    var tt = X.totals(d);
+    tables['УЗЛЫ'] = { caption: 'Таблица — Узлы крепления кабеля',
+      cols: [{ t: 'Обозначение', w: 25 }, { t: 'Наименование', w: 110 }, { t: 'Количество, шт.', w: 40 }],
+      rows: Object.keys(X.NODES).filter(function (k) { return tt.nodes[k]; }).map(function (k) { return [k, X.NODES[k], String(tt.nodes[k])]; }) };
+    var e1 = (d.measuresE1 || []).map(function (m) { return [m.num || '—', m.text, m.basis, 'пользователь инфраструктуры']; });
+    d.poles.forEach(function (p) {
+      if (!p.design) return;
+      var nums = (p.lines || []).map(function (l) { return l.num; }).join(' / ') + ' (' + p.mark + ')';
+      if (p.design.decision === 'extra') e1.push([nums, 'Установка дополнительной промежуточной опоры (по согласованию с владельцем инфраструктуры)', (p.design.why || []).join('; '), 'пользователь инфраструктуры']);
+      if (p.design.decision === 'recheck') e1.push([nums, 'Поверочный расчёт несущей способности по типовому проекту', (p.design.why || []).join('; '), 'пользователь инфраструктуры']);
+    });
+    tables['Е1'] = { caption: 'Таблица — Мероприятия, обусловленные размещением (Е.1)',
+      cols: [{ t: 'Опора', w: 30 }, { t: 'Мероприятие', w: 65 }, { t: 'Основание', w: 50 }, { t: 'Исполнитель', w: 30 }],
+      rows: e1.length ? e1 : [['—', 'Не требуются', '', '']] };
+  }
   if (cb.mark) {
     tables['КАБЕЛЬ'] = { caption: 'Таблица — Характеристики кабеля',
       cols: [{ t: 'Параметр', w: 110 }, { t: 'Значение', w: 65 }],

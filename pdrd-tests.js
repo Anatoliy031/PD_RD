@@ -465,6 +465,83 @@ if (DS && IM) {
   });
 }
 
+/* ---------------------------------------------------------- решения */
+var DC = window.PDRD_DECIDE;
+if (DC && IM) {
+  var v25d = window.__v25;
+  function proj(mod){ var r0 = IM.toProject(IM.fromV25Object(v25d(mod)), P.blank()); return r0.project; }
+  t('Решения: аварийная опора — «после восстановления», без марки — не «размещать» молча', function(){
+    var d0 = proj(); DC.propose(d0);
+    var av = d0.poles.filter(function(p){ return /Аварийн/.test(p.state); })[0];
+    eq(av.design.decision, 'after', 'аварийная');
+    return 'после восстановления владельцем';
+  });
+  t('Решения: ручное решение не перезаписывается', function(){
+    var d0 = proj(); DC.propose(d0);
+    d0.poles[0].design.decision = 'bypass'; d0.poles[0].design.by = 'проектировщик';
+    var r1 = DC.propose(d0); eq(d0.poles[0].design.decision, 'bypass'); eq(r1.kept, 1);
+    DC.propose(d0, { overwrite:true }); eq(d0.poles[0].design.by, 'авто', 'перезапись по флагу');
+    return 'сохранено';
+  });
+  t('Решения: линия вне трассы — обход', function(){
+    var d0 = proj(); d0.lines.forEach(function(l){ l.cable = false; }); DC.propose(d0);
+    eq(d0.poles.every(function(p){ return p.design.decision === 'bypass'; }), true); return 'все — обход';
+  });
+  t('Решения: «размещать» на аварийной опоре — блок (135-ФЗ)', function(){
+    var d0 = proj(); DC.propose(d0);
+    var av = d0.poles.filter(function(p){ return /Аварийн/.test(p.state); })[0];
+    av.design.decision = 'place'; av.design.by = 'проектировщик';
+    eq(DC.check(d0).some(function(x){ return x.lv === 'stop' && /без технологической возможности/.test(x.text); }), true);
+    return 'блок';
+  });
+  t('Решения: интервал высот — провод 7 м, норма 0,4 м, габарит 5 м + стрела', function(){
+    var d0 = proj(); d0.wiresByKv = { '0,4':[{ mark:'СИП-2', h_m:7 }] };
+    d0.calcResult = { poles:[], spans:[{ line:'ВЛ 0,4 Л-1', from:'1', to:'2', fmax:0.8 }] };
+    var p = d0.poles.filter(function(x){ return x.lines.some(function(l){ return l.lineId === 'ВЛ 0,4 Л-1' && l.num === '1'; }); })[0];
+    var hw = DC.heightWindow(d0, p, DC.poleInfo(d0)[p.id], DC.params(d0));
+    eq(hw.ok, true); near(hw.free[0][0], 5.8, 1e-9, 'низ'); near(hw.free[0][1], 6.6, 1e-9, 'верх');
+    return '5,8…6,6 м';
+  });
+  t('Решения: нет места на опоре — промежуточная опора', function(){
+    var d0 = proj(); d0.wiresByKv = { '0,4':[{ mark:'СИП-2', h_m:5.3 }] };
+    d0.calcResult = { poles:[], spans:[] }; DC.propose(d0);
+    var p = d0.poles.filter(function(x){ return x.mark === 'П8-1' && !/Аварийн/.test(x.state); })[0];
+    eq(p.design.decision, 'extra'); eq(p.design.why.some(function(w){ return /нет свободного/.test(w); }), true);
+    return 'Е.1';
+  });
+  t('Решения: муфты на смежных промежуточных опорах — блок (ТТ № 282р)', function(){
+    var o = function(o){ o.poles = [
+      { line:'Л', num:'1', kv:'0,4', mark:'П8-1', lat:45, lon:38, span:'30', nextRef:'2' },
+      { line:'Л', num:'2', kv:'0,4', mark:'П8-1', lat:45.0003, lon:38, span:'30', prevRef:'1', nextRef:'3' },
+      { line:'Л', num:'3', kv:'0,4', mark:'П8-1', lat:45.0006, lon:38, span:'', prevRef:'2' }]; };
+    var d0 = proj(o); d0.wiresByKv = { '0,4':[{ mark:'СИП', h_m:7 }] }; d0.decideParams = { reserveT_m:15 };
+    DC.propose(d0);
+    d0.poles[0].design.sleeve = true; d0.poles[0].design.reserve_m = 15; d0.poles[0].design.decision = 'place';
+    d0.poles[1].design.sleeve = true; d0.poles[1].design.reserve_m = 15; d0.poles[1].design.decision = 'place';
+    eq(DC.check(d0).some(function(x){ return x.lv === 'stop' && /смежных промежуточных/.test(x.text); }), true);
+    return 'выявлено';
+  });
+  t('Решения: запас не задан профилем Ростелеком — блок', function(){
+    var d0 = proj(); DC.propose(d0);
+    eq(DC.check(d0).some(function(x){ return /технологического запаса/.test(x.text) && x.lv === 'stop'; }), true);
+    d0.decideParams = { reserveT_m:15 };
+    eq(DC.check(d0).some(function(x){ return /технологического запаса/.test(x.text); }), false);
+    return 'требуется ввод';
+  });
+  t('Решения: гасители с заданной длины пролёта', function(){
+    var d0 = proj(); d0.decideParams = { dampersFromSpan_m:50 }; d0.wiresByKv = { '0,4':[{ mark:'СИП', h_m:7 }], '10':[{ mark:'АС 35', h_m:8 }] };
+    DC.propose(d0);
+    var p = d0.poles.filter(function(x){ return x.mark === 'П10-1'; })[0];
+    eq(p.design.dampers, true, 'пролёт 50 м'); return 'на пролётах ≥ 50 м';
+  });
+  t('Ведомость опор и Е.1 в документе', function(){
+    var d0 = proj(); DC.propose(d0);
+    var dd = window.PDRD_DOCX.dataFromProject(d0, window.PDRD_DOCX.TEMPLATES[2]);
+    eq(dd.tables['ОПОРЫ'].rows.length, d0.poles.length, 'строк'); eq(!!dd.tables['Е1'], true, 'Е.1');
+    return dd.tables['ОПОРЫ'].rows.length + ' опор';
+  });
+}
+
 var ok = res.filter(function(r){ return r.ok; }).length;
 var rows = document.getElementById('rows');
 res.forEach(function(r){

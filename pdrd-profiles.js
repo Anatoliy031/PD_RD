@@ -13,6 +13,8 @@ var P = [
   pilot: true,
   smeta: 'по Заказу',
   delivery: 'ПД: 1 экз. на бумаге + PDF + редактируемый формат (DOCX, DXF)',
+  params: { reserveT_m: null, emergencyShare: 0, minBuildLength_m: null, dampersOwnProtector: false,
+            sleeveBelowCrossarm: false, note: 'Длины запасов и тип муфт — по технической политике ПАО «Ростелеком» (запросить альбом)' },
   req: [
     { id:'rt.pp87',   ref:'разд. XIV', text:'Состав и оформление ПД — по ПП РФ № 87' },
     { id:'rt.gost',   ref:'разд. XVII', text:'Оформление — по ГОСТ Р 21.101-2020' },
@@ -34,6 +36,7 @@ var P = [
   source: 'Приложение № 1 «Техническое задание на ПИР и СМР по созданию ВОЛС»',
   smeta: 'не указано',
   delivery: 'ПД: 2 экз. на бумаге + электронный комплект + AutoCAD и PDF',
+  params: { reserveT_m: 15, emergencyShare: 0.05, minBuildLength_m: null, dampersOwnProtector: false, sleeveBelowCrossarm: false, signH_m: 2.5 },
   req: [
     { id:'mts.pp87',    ref:'п. 9.4', text:'Состав ПД — по ПП РФ № 87; необязательные разделы согласовать' },
     { id:'mts.lks',     ref:'п. 9.4.1', text:'ЛКС и кабель связи — самостоятельные объекты; текстовое и графическое описание способа прокладки в разделе ТКР' },
@@ -58,6 +61,7 @@ var P = [
   source: 'Письмо ПАО «ВымпелКом» (Краснодарское отделение) и приложение № 1 «Типовое ТЗ»; ОТТ ВОЛС 2026 — полный текст запросить',
   smeta: 'не разрабатывать',
   delivery: 'ПД, РД, заключение экспертизы, разрешения на ПИР',
+  params: { reserveT_m: 15, emergencyShare: 0, minBuildLength_m: 5000, dampersOwnProtector: true, sleeveBelowCrossarm: true },
   req: [
     { id:'bl.pp87',     ref:'п. 18.1', text:'ПД — по ПП РФ № 87; титул и состав согласовать' },
     { id:'bl.route',    ref:'п. 16', text:'Акт выбора трассы: не менее 2 вариантов, схемы на КПТ с картографической основой' },
@@ -79,6 +83,7 @@ var P = [
   source: 'Только законодательство и ТТ № 282р',
   smeta: 'по заданию',
   delivery: 'DOCX, PDF, XLSX, KMZ, DXF',
+  params: { reserveT_m: null, emergencyShare: 0, minBuildLength_m: null, dampersOwnProtector: false, sleeveBelowCrossarm: false },
   req: []
 }
 ];
