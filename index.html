@@ -4,13 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ПД и РД ВОЛС на ВЛ — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=0.3.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=0.4.0">
 </head>
 <body>
 <header class="top"><div class="top-in">
   <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
   <nav aria-label="Разделы">
     <a class="on" href="index.html">Комплект</a>
+    <a href="vhod.html">Исходные данные</a>
     <a href="shablony.html">Шаблоны</a>
     <a href="normy.html">Нормы</a>
     <a href="tests.html">Проверка ядра</a>
@@ -22,8 +23,8 @@
   <section class="sheet" aria-labelledby="h1">
     <h1 id="h1">Проектная и рабочая документация на размещение ВОЛС на опорах ВЛ 0,4–110 кВ</h1>
     <p class="lead">Инструмент собирает комплект ПД и РД из отчёта по п. 13 Правил, выпущенного АРМ ППО,
-      технического задания оператора и проектных решений. Сейчас готово ядро: проект хранится
-      в этом браузере, резервная копия сохраняется в файл.</p>
+      технического задания оператора и проектных решений. Готово: импорт исходных данных с входным контролем, реестр норм, шаблоны томов.
+      Проект хранится в этом браузере, резервная копия сохраняется в файл.</p>
     <div class="stamp" aria-label="Основная надпись проекта">
       <div class="stamp-roles">
         <div><span>Разраб.</span><b id="sRazrab"></b></div>
@@ -59,7 +60,7 @@
 
     <section class="panel" aria-labelledby="hV25">
       <h2 id="hV25">Данные АРМ ППО</h2>
-      <p class="sub">Чтение осмотра из АРМ ППО, открытого на том же сайте. PD_RD эти данные не изменяет.</p>
+      <p class="sub">Импорт отчёта по п. 13 или резервной копии осмотра и входной контроль — на странице <a href="vhod.html">«Исходные данные»</a>. Здесь — проверка осмотра АРМ ППО на этом сайте; PD_RD его не изменяет.</p>
       <div class="btns"><button class="btn" id="bV25">Проверить наличие данных</button></div>
       <div id="v25Msg"></div>
     </section>
@@ -75,9 +76,9 @@
     <h2 id="hSt">Ход разработки</h2>
     <ol class="stages">
       <li><div><b>Анализ АРМ ППО и карта полей</b><small>Структура данных V25, сборка DOCX, аудит; разбор пилотного отчёта</small></div><span class="st done">утверждено</span></li>
-      <li><div><b>Нормы и шаблоны томов</b><small>Реестр норм, состав ПД, требования операторов, шаблоны 11 томов</small></div><span class="st done">на проверке</span></li>
-      <li><div><b>Модель, импорт, входной контроль</b><small>Пилот: 909 записей → 898 физических опор</small></div><span class="st work">следующий</span></li>
-      <li><div><b>Расчёты</b><small>Нагрузки ПУЭ-7, уравнение состояния, моменты на опоры</small></div><span class="st">далее</span></li>
+      <li><div><b>Нормы и шаблоны томов</b><small>Реестр норм, состав ПД, требования операторов, шаблоны томов</small></div><span class="st done">готово</span></li>
+      <li><div><b>Модель, импорт, входной контроль</b><small>Пилот: 909 записей → 898 физических опор; лист входного контроля</small></div><span class="st done">готово</span></li>
+      <li><div><b>Расчёты</b><small>Нагрузки ПУЭ-7, уравнение состояния, моменты на опоры</small></div><span class="st work">следующий</span></li>
       <li><div><b>Решения по опорам и пролётам</b></div><span class="st">далее</span></li>
       <li><div><b>Графическая часть</b><small>10 типов листов со штампами</small></div><span class="st">далее</span></li>
       <li><div><b>Спецификация и ведомость объёмов работ</b></div><span class="st">далее</span></li>
@@ -89,7 +90,7 @@
   <p class="foot">PD_RD <span id="fVer"></span> · инструкция разработки — <a href="https://github.com/Anatoliy031/PD_RD/blob/main/CLAUDE.md">CLAUDE.md</a></p>
 </main>
 
-<script src="pdrd-core.js?v=0.3.0"></script>
+<script src="pdrd-core.js?v=0.4.0"></script>
 <script>
 (function(){
   var P = window.PDRD, $ = function(id){ return document.getElementById(id); };
@@ -135,7 +136,7 @@
   };
   $('bV25').onclick = function(){
     var r = P.readV25(), h = $('v25Msg');
-    if (!r) return msg(h,'warn','Данных АРМ ППО на этом сайте нет. Они появятся, когда оба инструмента будут опубликованы на одном адресе (anab.gitverse.site). До этого проект будет загружаться из файла резервной копии АРМ ППО — эта функция появится на шаге «Модель, импорт, входной контроль».');
+    if (!r) return msg(h,'warn','Данных АРМ ППО на этом сайте нет. Они появятся, когда оба инструмента будут опубликованы на одном адресе (anab.gitverse.site). До этого загружайте отчёт (.docx) или резервную копию осмотра (.json) на странице «Исходные данные».');
     if (r.error) return msg(h,'bad', r.error);
     msg(h,'ok','Найден осмотр АРМ ППО ' + r.version + ': «' + (r.object||'без наименования') + '», опор — ' + r.poles + ', линий — ' + r.lines + (r.report ? ', отчёт ' + r.report : '') + '.');
   };

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Исходные данные и входной контроль — PD_RD</title>
+<link rel="stylesheet" href="pdrd-ui.css?v=0.4.0">
+<style>
+.drop{border:2px dashed var(--line);border-radius:8px;padding:18px;text-align:center;background:var(--sheet)}
+.drop.over{border-color:var(--blue);background:var(--blue-l)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:6px 0 4px}
+.stat{border:1px solid var(--line-s);border-radius:6px;padding:10px 12px;background:#fff}
+.stat b{display:block;font-size:24px;font-family:var(--tech);line-height:1.1}
+.stat span{font-size:12.5px;color:var(--muted)}
+.stat.bad b{color:var(--bad)} .stat.warn b{color:var(--warn)}
+.kv{display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:4px 14px;font-size:14px;margin:0}
+.kv dt{color:var(--muted)} .kv dd{margin:0}
+.rule{border-top:1px solid var(--line-s);padding:10px 0}
+.rule h3{font-size:15px;margin:0 0 6px}
+.item{display:grid;grid-template-columns:auto 1fr;gap:10px;padding:5px 0;font-size:14px}
+.lv{font-size:11.5px;padding:2px 8px;border-radius:999px;white-space:nowrap;height:fit-content}
+.lv.stop{background:var(--bad-bg);color:var(--bad)} .lv.warn{background:var(--warn-bg);color:var(--warn)} .lv.info{background:var(--blue-l);color:var(--blue-d)}
+.item small{display:block;color:var(--muted);margin-top:2px}
+.filters{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
+.filters button{border:1px solid var(--line-s);background:#fff;border-radius:999px;padding:5px 12px;cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--blue);color:#fff;border-color:var(--blue)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
+  <nav aria-label="Разделы">
+    <a href="index.html">Комплект</a>
+    <a class="on" href="vhod.html">Исходные данные</a>
+    <a href="shablony.html">Шаблоны</a>
+    <a href="normy.html">Нормы</a>
+    <a href="tests.html">Проверка ядра</a>
+  </nav>
+</div></header>
+<main class="wrap">
+  <section class="panel">
+    <h2>Исходные данные из АРМ ППО</h2>
+    <p class="sub">Загрузите резервную копию осмотра АРМ ППО (.json) или выпущенный отчёт по п. 13 (.docx).
+      Файл обрабатывается в браузере и никуда не передаётся. Данные отчёта в проекте доступны только для чтения.</p>
+    <div class="drop" id="drop">
+      <p style="margin:0 0 10px">Перетащите файл сюда или выберите его</p>
+      <label class="btn primary" for="file">Выбрать файл</label>
+      <input type="file" id="file" accept=".json,.docx,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+      <button class="btn" id="bLocal" type="button">Взять из АРМ ППО в этом браузере</button>
+    </div>
+    <div id="loadMsg"></div>
+  </section>
+
+  <section class="panel" id="res" hidden>
+    <h2>Результат разбора</h2>
+    <p class="sub" id="resSub"></p>
+    <div class="stats" id="stats"></div>
+    <dl class="kv" id="facts"></dl>
+    <div class="btns">
+      <button class="btn primary" id="bAccept" type="button">Принять в проект</button>
+      <button class="btn" id="bDocx" type="button">Скачать лист входного контроля (DOCX)</button>
+    </div>
+    <div id="accMsg"></div>
+  </section>
+
+  <section class="panel" id="fnd" hidden>
+    <h2>Входной контроль</h2>
+    <p class="sub">Блокирующие замечания препятствуют выпуску документации до ответа на запрос; предупреждения учитываются в проектных решениях.</p>
+    <div class="filters" id="flt" role="group" aria-label="Фильтр по уровню"></div>
+    <div id="rules"></div>
+  </section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="pdrd-core.js?v=0.4.0"></script>
+<script src="pdrd-norms.js?v=0.4.0"></script>
+<script src="pdrd-refs-v25.js?v=0.4.0"></script>
+<script src="pdrd-import.js?v=0.4.0"></script>
+<script src="pdrd-docx.js?v=0.4.0"></script>
+<script>
+(function(){
+  var I = PDRD_IMPORT, $ = function(id){ return document.getElementById(id); };
+  var state = { ex:null, res:null, filter:'all', accepted:false };
+  function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function msg(host, cls, t){ host.innerHTML = ''; host.appendChild(el('div', 'msg ' + cls, t)); }
+  function nf(v){ return v === null || v === undefined ? '—' : String(v).replace('.', ','); }
+  function ru(iso){ return iso ? iso.slice(0,10).split('-').reverse().join('.') : '—'; }
+  var LV = { stop:'блокирует', warn:'учесть', info:'сведения' };
+
+  function show(res, sourceText){
+    state.res = res;
+    var s = res.stats, d = res.project;
+    $('res').hidden = false; $('fnd').hidden = false;
+    $('resSub').textContent = sourceText;
+    var st = $('stats'); st.innerHTML = '';
+    [[s.records,'записей опор в отчёте',''],[s.physical,'физических опор',''],[s.groups,'совместных групп',''],
+     [s.lines,'линий',''],[s.stop,'блокирующих замечаний', s.stop?'bad':''],[s.warn,'предупреждений', s.warn?'warn':'']]
+      .forEach(function(x){ var c = el('div','stat '+x[2]); c.appendChild(el('b','',String(x[0]))); c.appendChild(el('span','',x[1])); st.appendChild(c); });
+    var f = $('facts'); f.innerHTML = '';
+    var r = d.basis.report13;
+    [['Отчёт по п. 13', (r.number||'—') + ' от ' + ru(r.date)],
+     ['Объект', d.passport.object || '—'],
+     ['Оператор связи', d.passport.operator || '—'],
+     ['Подрядчик оператора', d.passport.contractor || 'не указан'],
+     ['Владелец', (d.passport.owner||'') + (d.passport.branch ? ', ' + d.passport.branch : '')],
+     ['Классы напряжения', s.classes.map(function(k){ return String(k).replace('.',','); }).join(' и ') + ' кВ'],
+     ['Климат', 'ветер ' + (d.climate.windRegion||'—') + ' (' + (d.climate.windPa||'—') + ' Па), гололёд ' + (d.climate.iceRegion||'—') + ' (' + (d.climate.iceMm||'—') + ' мм), местность ' + (d.climate.terrain||'—') + ', сейсмичность ' + (d.climate.seismic||'—')],
+     ['Кабель', d.cable.mark ? d.cable.mark + ', d ' + nf(d.cable.d_mm) + ' мм, ' + nf(d.cable.mass_kg_km) + ' кг/км, допустимое тяжение ' + nf(d.cable.t_allow_kn) + ' кН' : '—'],
+     ['Профиль оператора', (window.PDRD_PROFILES ? PDRD_PROFILES.get(d.profile.operator).title : d.profile.operator)],
+     ['Контрольная сумма файла', r.sha256 ? r.sha256.slice(0,16) + '…' : '—']
+    ].forEach(function(x){ f.appendChild(el('dt','',x[0])); f.appendChild(el('dd','',String(x[1]))); });
+    drawFindings();
+  }
+
+  function drawFindings(){
+    var list = state.res.findings, host = $('rules'); host.innerHTML = '';
+    var fl = $('flt'); fl.innerHTML = '';
+    [['all','Все'],['stop','Блокирующие'],['warn','Предупреждения'],['info','Сведения']].forEach(function(o){
+      var n = o[0]==='all' ? list.length : list.filter(function(x){ return x.lv===o[0]; }).length;
+      var b = el('button','', o[1] + ' (' + n + ')'); b.type='button'; b.setAttribute('aria-pressed', state.filter===o[0]);
+      b.onclick = function(){ state.filter = o[0]; drawFindings(); };
+      fl.appendChild(b);
+    });
+    var by = {};
+    list.filter(function(x){ return state.filter==='all' || x.lv===state.filter; }).forEach(function(x){ (by[x.n] = by[x.n] || { title:x.title, items:[] }).items.push(x); });
+    Object.keys(by).sort(function(a,b){ return a-b; }).forEach(function(n){
+      var sec = el('div','rule'); sec.appendChild(el('h3','', n + '. ' + by[n].title));
+      by[n].items.forEach(function(x){
+        var it = el('div','item'); it.appendChild(el('span','lv '+x.lv, LV[x.lv]));
+        var t = el('div','', x.text);
+        var meta = [];
+        if (x.where) meta.push('Где: ' + x.where);
+        if (x.ask) meta.push('Запрос ' + x.ask);
+        if (x.fix) meta.push('Действие: ' + x.fix);
+        if (meta.length) t.appendChild(el('small','', meta.join(' · ')));
+        it.appendChild(t); sec.appendChild(it);
+      });
+      host.appendChild(sec);
+    });
+    if (!host.children.length) host.appendChild(el('p','sub','Замечаний этого уровня нет.'));
+  }
+
+  function process(promise, label){
+    msg($('loadMsg'), 'warn', 'Разбор «' + label + '»…');
+    state.accepted = false; $('accMsg').innerHTML = '';
+    promise.then(function(ex){
+      state.ex = ex;
+      var base = PDRD.hasProject() ? JSON.parse(JSON.stringify(PDRD.load())) : null;
+      var res = I.toProject(ex, base);
+      msg($('loadMsg'), 'ok', 'Файл разобран: ' + label + '.');
+      show(res, (ex.source.kind === 'report-docx' ? 'Отчёт по п. 13 (.docx)' : 'Осмотр АРМ ППО') + (ex.source.version ? ' ' + ex.source.version : '') + (ex.source.file ? ' — ' + ex.source.file : '') + '. Проект ещё не изменён — нажмите «Принять в проект».');
+    }).catch(function(e){ msg($('loadMsg'), 'bad', 'Не удалось разобрать файл: ' + e.message); });
+  }
+
+  $('file').onchange = function(e){ var f = e.target.files[0]; if (f) process(I.readFile(f), f.name); e.target.value = ''; };
+  var drop = $('drop');
+  ['dragenter','dragover'].forEach(function(t){ drop.addEventListener(t, function(e){ e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave','drop'].forEach(function(t){ drop.addEventListener(t, function(e){ e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function(e){ var f = e.dataTransfer.files[0]; if (f) process(I.readFile(f), f.name); });
+  $('bLocal').onclick = function(){
+    process(Promise.resolve().then(function(){ return I.fromLocalV25(); }), 'осмотр АРМ ППО в браузере');
+  };
+
+  $('bAccept').onclick = function(){
+    if (!state.res) return;
+    var cur = PDRD.hasProject() ? PDRD.load() : null;
+    if (cur && cur.poles.length && !confirm('В проекте уже есть опоры (' + cur.poles.length + '). Заменить их данными нового отчёта? Паспорт проекта, подписи и реквизиты сохранятся.')) return;
+    PDRD.replaceAll(state.res.project);
+    state.accepted = true;
+    msg($('accMsg'), 'ok', 'Данные приняты в проект: физических опор — ' + state.res.stats.physical + '. Резервную копию проекта можно сохранить на главной странице.');
+  };
+
+  $('bDocx').onclick = function(){
+    if (!state.res) return;
+    var d = state.res.project;
+    fetch(PDRD_DOCX.INTAKE_TPL.file).then(function(r){ return r.arrayBuffer(); })
+      .then(function(buf){ return PDRD_DOCX.fillDocx(buf, PDRD_DOCX.dataForIntake(d)); })
+      .then(function(res){
+        var a = document.createElement('a'); a.href = URL.createObjectURL(res.blob);
+        a.download = 'Vhodnoj_kontrol_' + String(d.basis.report13.number || 'otchet').replace(/[^\w\-]+/g, '_') + '.docx';
+        document.body.appendChild(a); a.click(); a.remove();
+        msg($('accMsg'), 'ok', 'Лист входного контроля сформирован. Не заполнено полей: ' + res.report.missing.length + ' (шифр и подписи проекта).');
+      }).catch(function(e){ msg($('accMsg'), 'bad', 'Ошибка формирования листа: ' + e.message); });
+  };
+
+  /* Если проект уже содержит результаты входного контроля — показать их */
+  if (PDRD.hasProject()) {
+    var d = PDRD.load();
+    if (d.intake && d.intake.length) {
+      var recs = 0; d.poles.forEach(function(p){ recs += (p.lines||[]).length; });
+      var kvs = {}; d.poles.forEach(function(p){ if (p.kv >= 0) kvs[p.kv] = 1; });
+      show({ project:d, findings:d.intake, stats:{ records:recs, physical:d.poles.length,
+        groups:d.poles.filter(function(p){ return (p.lines||[]).length > 1; }).length, lines:d.lines.length,
+        classes:Object.keys(kvs).map(Number).sort(function(a,b){return a-b;}),
+        stop:d.intake.filter(function(x){return x.lv==='stop';}).length, warn:d.intake.filter(function(x){return x.lv==='warn';}).length } },
+        'Данные проекта из этого браузера (' + (d.basis.report13.source || '') + ').');
+      state.accepted = true;
+    }
+  }
+})();
+</script>
+<script src="pdrd-profiles.js?v=0.4.0"></script>
+</body>
+</html>

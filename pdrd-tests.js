@@ -167,6 +167,127 @@ if (DX) {
   t('Шаблонов — 10 разделов ПД и том РД', function(){ eq(DX.TEMPLATES.length, 11); eq(DX.TEMPLATES.filter(function(x){ return x.pd; }).length, 10); return '11'; });
 }
 
+/* ---------------------------------------------------------- импорт и входной контроль */
+var IM = window.PDRD_IMPORT;
+if (IM) {
+  function v25(extra){
+    var o = { v:'3.5.10', pass:{ 'ОТЧЁТ_НОМЕР':'ДРНУ-ППО/Т-1', 'ОТЧЁТ_ДАТА':'2026-09-08', 'ЗАПРОС_ДАТА':'2026-07-08',
+      'ПОЛЬЗОВАТЕЛЬ_НАИМ':'ООО "Подряд" в интересах ПАО "Ростелеком"', 'ОБЪЕКТ_НАИМ':'Тестовый объект',
+      'РАБОТЫ_НАЧАЛО':'2026-08-14', 'РАБОТЫ_ОКОНЧАНИЕ':'2026-08-20', 'ВЕТЕР_РАЙОН':'III', 'ВЕТЕР_ДАВЛЕНИЕ':'650',
+      'ГОЛОЛЁД_РАЙОН':'II', 'ГОЛОЛЁД_СТЕНКА':'15', 'МЕСТНОСТЬ_ТИП':'A — открытая', 'СЕЙСМИКА':'7' },
+      lines:[], si:[], meas:[], acts:[],
+      poles:[
+        { line:'ВЛ 0,4 Л-1', num:'1', kv:'0,4', mark:'П8-1', lat:45.1, lon:38.1, span:'35', defect:'—' },
+        { line:'ВЛ 0,4 Л-2', num:'1', kv:'0,4', mark:'П8-1', lat:45.100005, lon:38.100005, span:'30', defect:'—' },
+        { line:'ВЛ 0,4 Л-1', num:'2', kv:'0,4', mark:'П8-1', lat:45.1003, lon:38.1, span:'55', defect:'A' },
+        { line:'ВЛ 10 Ф-1', num:'5', kv:'10', mark:'П10-1', lat:45.2, lon:38.2, span:'50', defect:'—' },
+        { line:'ВЛ 10 Ф-1', num:'6', kv:'10', mark:'', lat:45.201, lon:38.2, span:'', defect:'—' }
+      ],
+      wires:[{ mark:'СИП-2 3х70+1х95', n:1, kv:'0,4', h:'7', tens:'2,5' }, { mark:'АС 35/6.2', n:3, kv:'10', h:'', tens:'' }],
+      cables:[{ mark:'ОКСН-6-2,7', kv:'0,4–10', h:'5', tens:'1,2', arm:'спиральная' }] };
+    if (extra) extra(o);
+    return o;
+  }
+  t('Импорт V25: оператор и подрядчик разделены', function(){
+    var ex = IM.fromV25Object(v25());
+    eq(ex.user.operator, 'ПАО «Ростелеком»'); eq(ex.user.contractor, 'ООО «Подряд»'); eq(ex.climate.terrain_type, 'A', 'тип местности');
+    return ex.user.operator + ' / ' + ex.user.contractor;
+  });
+  t('Совместные опоры разных линий (≤ 1,5 м) объединяются', function(){
+    var ex = IM.fromV25Object(v25()), ph = IM.mergePoles(ex.poles);
+    eq(ex.poles.length, 5, 'записей'); eq(ph.length, 4, 'физических');
+    eq(ph[0].records.length, 2, 'в группе');
+    return '5 записей → 4 опоры';
+  });
+  t('Опоры одной линии рядом не объединяются', function(){
+    var recs = [{ line_id:'А', lat:45, lon:38 }, { line_id:'А', lat:45.000001, lon:38 }];
+    eq(IM.mergePoles(recs).length, 2); return 'разные номера одной линии остаются разными';
+  });
+  t('Допуск объединения 1,5 м соблюдается', function(){
+    var d1 = IM.haversine({ lat:45, lon:38 }, { lat:45.00001, lon:38 });
+    eq(d1 > 1.0 && d1 < 1.2, true, 'расстояние ~1,11 м');
+    eq(IM.mergePoles([{ line_id:'А', lat:45, lon:38 }, { line_id:'Б', lat:45.00001, lon:38 }]).length, 1, '1,1 м — объединены');
+    eq(IM.mergePoles([{ line_id:'А', lat:45, lon:38 }, { line_id:'Б', lat:45.00002, lon:38 }]).length, 2, '2,2 м — нет');
+    return 'haversine ' + d1.toFixed(2) + ' м';
+  });
+  function rulesOf(o){ var ex = IM.fromV25Object(o); return IM.intake(ex, IM.mergePoles(ex.poles)); }
+  function hasRule(list, rule, lv){ return list.some(function(x){ return x.rule === rule && (!lv || x.lv === lv); }); }
+  t('Контроль: конец работ раньше начала — блок', function(){
+    var f = rulesOf(v25(function(o){ o.pass['РАБОТЫ_ОКОНЧАНИЕ'] = '2026-08-04'; }));
+    eq(hasRule(f, 'dates', 'stop'), true); return 'правило 1';
+  });
+  t('Контроль: провода «все классы» при двух классах — блок', function(){
+    var f = rulesOf(v25(function(o){ o.wires = [{ mark:'АС 35/6.2', n:3, kv:'все классы', h:'', tens:'' }]; }));
+    eq(f.filter(function(x){ return x.rule === 'wires' && x.lv === 'stop'; }).length >= 2, true, 'класс и тяжение');
+    return 'правило 3';
+  });
+  t('Контроль: провода по классам с тяжением — без блока по классу', function(){
+    var f = rulesOf(v25());
+    eq(f.some(function(x){ return x.rule === 'wires' && /все классы|указан для класса/.test(x.text); }), false, 'класс');
+    eq(f.some(function(x){ return x.rule === 'wires' && /АС 35.*тяжение не указано/.test(x.text); }), true, 'тяжение АС 35');
+    return 'СИП 0,4 и АС 35 10 кВ разнесены';
+  });
+  t('Контроль: исполнитель Е.1 «владелец» исправляется', function(){
+    var o = v25(function(o){ o.acts = [{ manual:1, grp:'Е.1 — размещение', act:'Поверочный расчёт', performer:'Владелец инфраструктуры' }]; });
+    var ex = IM.fromV25Object(o), r = IM.toProject(ex, P.blank());
+    eq(hasRule(r.findings, 'e1', 'stop'), true, 'замечание');
+    eq(r.project.measuresE1[0].performer, 'пользователь инфраструктуры', 'исправлено'); eq(r.project.measuresE1[0].corrected, true, 'отметка');
+    return 'правило 5';
+  });
+  t('Контроль: опора без марки — блок', function(){ eq(hasRule(rulesOf(v25()), 'mark', 'stop'), true); return 'правило 9'; });
+  t('Контроль: «загнивание древесины» на ж/б опоре — блок', function(){
+    var ex = IM.fromV25Object(v25(function(o){ o.poles[2].defText = 'Загнивание древесины'; }));
+    eq(hasRule(IM.intake(ex, IM.mergePoles(ex.poles)), 'material', 'stop'), true); return 'правило 8';
+  });
+  t('Контроль: монтажное тяжение ≥ допустимого — предупреждение', function(){
+    var f = rulesOf(v25(function(o){ o.cables[0].tens = '2,7'; }));
+    eq(f.some(function(x){ return x.rule === 'cable' && x.lv === 'warn' && /монтажное тяжение/.test(x.text); }), true); return 'правило 4';
+  });
+  t('Контроль: марки нет в справочнике — блок', function(){
+    var f = rulesOf(v25(function(o){ o.poles[0].mark = 'X-999'; }));
+    eq(hasRule(f, 'reference', 'stop'), true); return 'правило 16';
+  });
+  t('Проект из импорта: физические опоры, аварийная — без возможности', function(){
+    var r = IM.toProject(IM.fromV25Object(v25()), P.blank());
+    eq(r.project.poles.length, 4, 'опор'); eq(r.stats.groups, 1, 'групп');
+    var av = r.project.poles.filter(function(p){ return /Аварийн/.test(p.state); });
+    eq(av.length, 1, 'аварийных'); eq(av[0].fromReport[0].tech_possibility, 'нет', 'возможность');
+    eq(r.project.profile.operator, 'rostelecom-b2c-gpon', 'профиль');
+    return '4 опоры, профиль Ростелеком';
+  });
+  t('Импорт не трогает паспорт проекта (подписи, СРО)', function(){
+    var base = P.blank(); base.passport.signs.razrab = 'Иванов И.И.'; base.legal.sro.name = 'СРО «Тест»';
+    var r = IM.toProject(IM.fromV25Object(v25()), base);
+    eq(r.project.passport.signs.razrab, 'Иванов И.И.'); eq(r.project.legal.sro.name, 'СРО «Тест»'); return 'сохранены';
+  });
+  t('Разбор отчёта .docx: таблицы по заголовкам', function(){
+    function tbl(head, rows){ var r = function(cs){ return '<w:tr>' + cs.map(function(c){ return '<w:tc><w:p><w:r><w:t>' + c + '</w:t></w:r></w:p></w:tc>'; }).join('') + '</w:tr>'; };
+      return '<w:tbl>' + r(head) + rows.map(r).join('') + '</w:tbl>'; }
+    function p_(t){ return '<w:p><w:r><w:t>' + t + '</w:t></w:r></w:p>'; }
+    var H = ['№','Линия (фидер)','№ опоры','Класс, кВ','Марка','Материал','Тип по назначению','Смежная опора (пред.)','Пролёт до пред., м','Смежная опора (след.)','Пролёт до след., м','Расч. пролёт, м','Габарит. пролёт, м','Местность','Габарит норм., м','Ранее размещ. ОК','Дефект','Кат.','Состояние (ГОСТ 31937-2024)','Технол. возможность','Мероприятие','Широта','Долгота'];
+    var xml = '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+      p_('Регистрационный номер ДРНУ-ППО/2026-1 от 08.09.2026') + p_('Пользователь инфраструктуры: ООО "А" в интересах ПАО "Ростелеком"') +
+      tbl(['Сведения','Значение'], [['Период выполнения работ','с 14.08.2026 по 04.08.2026'],['Количество опор в границах запроса','2 шт.']]) +
+      tbl(H, [['1','Л-1','1','0,4','П8-1','Железобетонная','Промежуточная','—','—','2','76','76','40','населённая','6','—','—','—','Работоспособное','есть','—','45,1','38,1'],
+              ['2','Л-1','2','0,4','П8-1','Железобетонная','Промежуточная','1','76','—','—','76','40','населённая','6','—','—','—','Работоспособное','есть','—','45,1007','38,1']]) +
+      '</w:body></w:document>';
+    var ex = IM.fromReportDocxXml(xml);
+    eq(ex.report.number, 'ДРНУ-ППО/2026-1'); eq(ex.report.date, '2026-09-08', 'дата');
+    eq(ex.poles.length, 2, 'опор'); eq(ex.poles[0].lat, 45.1, 'широта'); eq(ex.poles[0].span_next_m, 76, 'пролёт');
+    eq(ex.report.period.to, '2026-08-04', 'период'); eq(ex.user.operator, 'ПАО «Ростелеком»', 'оператор');
+    var f = IM.intake(ex, IM.mergePoles(ex.poles));
+    eq(hasRule(f, 'dates', 'stop'), true, 'даты'); eq(hasRule(f, 'decisions'), true, 'пролёт > габаритного');
+    return '2 опоры, период и пролёты разобраны';
+  });
+  t('Лист входного контроля: таблицы и заключение', function(){
+    var r = IM.toProject(IM.fromV25Object(v25()), P.blank());
+    var dd = window.PDRD_DOCX.dataForIntake(r.project);
+    eq(dd.tables['ВК_ЗАМЕЧАНИЯ'].rows.length, r.findings.length, 'замечаний');
+    eq(/блокирующих/.test(dd.blocks['ВК_ЗАКЛЮЧЕНИЕ'][0]), true, 'заключение');
+    return r.findings.length + ' замечаний';
+  });
+}
+
 var ok = res.filter(function(r){ return r.ok; }).length;
 var rows = document.getElementById('rows');
 res.forEach(function(r){

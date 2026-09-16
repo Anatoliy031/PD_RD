@@ -16,7 +16,7 @@ import os, sys, zipfile, datetime
 from xml.sax.saxutils import escape
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VERSION = '0.3.0'
+VERSION = '0.4.0'
 
 MM = 56.6929  # twips в мм
 def tw(mm): return int(round(mm * MM))
@@ -199,8 +199,26 @@ NS = ('xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
 def hdr_xml(tag, body):
     return f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:{tag} {NS}>{body}</w:{tag}>'
 
+def side_table():
+    """Дополнительные графы на поле подшивки (ГОСТ Р 21.101-2020): «Взам. инв. №»,
+    «Подп. и дата», «Инв. № подл.» — плавающая таблица 5+7 мм у нижнего края рамки."""
+    rows_def = [(25, 'Взам. инв. №'), (35, 'Подп. и дата'), (25, 'Инв. № подл.')]
+    y = 297 - 5 - sum(h for h, _ in rows_def)
+    thick = 12
+    borders = ''.join(f'<w:{k} w:val="single" w:sz="{thick}" w:color="000000"/>' for k in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'])
+    def c(w, text, sz=14):
+        return (f'<w:tc><w:tcPr><w:tcW w:w="{tw(w)}" w:type="dxa"/><w:textDirection w:val="btLr"/><w:vAlign w:val="center"/></w:tcPr>'
+                f'<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="200" w:lineRule="exact"/><w:jc w:val="center"/></w:pPr>{rich(text, sz=sz)}</w:p></w:tc>')
+    rows = ''.join(f'<w:tr><w:trPr><w:trHeight w:val="{tw(h)}" w:hRule="exact"/><w:cantSplit/></w:trPr>{c(5, label)}{c(7, "")}</w:tr>'
+                   for h, label in rows_def)
+    return (f'<w:tbl><w:tblPr><w:tblpPr w:leftFromText="0" w:rightFromText="0" w:vertAnchor="page" w:horzAnchor="page" '
+            f'w:tblpX="{tw(8)}" w:tblpY="{tw(y)}"/><w:tblOverlap w:val="overlap"/><w:tblW w:w="{tw(12)}" w:type="dxa"/>'
+            f'<w:tblBorders>{borders}</w:tblBorders><w:tblLayout w:type="fixed"/>'
+            f'<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>'
+            f'<w:tblGrid><w:gridCol w:w="{tw(5)}"/><w:gridCol w:w="{tw(7)}"/></w:tblGrid>{rows}</w:tbl>')
+
 def header_frame():
-    return hdr_xml('hdr', '<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr>'
+    return hdr_xml('hdr', side_table() + '<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr>'
                           + frame_shape() + watermark_shape() + '</w:p>')
 
 def header_empty():
@@ -218,7 +236,7 @@ def li(t): return para(t, 'ListDash')
 def mark(t): return para(t, 'Marker')     # служебная строка {{ТАБЛИЦА}}/{{БЛОК}}/{{ЕСЛИ}}
 def note(t): return para(t, 'Hint')       # подсказка для проектировщика, удаляется заполнителем
 
-def title_page(vol_title, pd=True):
+def title_page(vol_title, pd=True, stage=None):
     out = [
         para('{{ВЛАДЕЛЕЦ_НАИМ}}', 'TitleSmall', align='center'),
         para('{{ОРГАНИЗАЦИЯ}}', 'TitleSmall', align='center'),
@@ -228,12 +246,12 @@ def title_page(vol_title, pd=True):
         para('', 'Body', after=600),
         para('{{ОБЪЕКТ_НАИМ}}', 'TitleObject', align='center'),
         para('', 'Body', after=400),
-        para('ПРОЕКТНАЯ ДОКУМЕНТАЦИЯ' if pd else 'РАБОЧАЯ ДОКУМЕНТАЦИЯ', 'TitleStage', align='center'),
+        para(stage or ('ПРОЕКТНАЯ ДОКУМЕНТАЦИЯ' if pd else 'РАБОЧАЯ ДОКУМЕНТАЦИЯ'), 'TitleStage', align='center'),
         para(vol_title, 'TitleVolume', align='center'),
         para('', 'Body', after=200),
         para('{{ОБОЗНАЧЕНИЕ}}', 'TitleCode', align='center'),
     ]
-    if pd:
+    if pd and not stage:
         out.append(para('Том {{ТОМ_НОМЕР}}', 'TitleSmall', align='center'))
     out += [
         para('', 'Body', after=2400),
@@ -257,7 +275,7 @@ def signature_table():
             f'<w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>{grid}</w:tblGrid>{rows}</w:tbl>')
 
 def contents_block():
-    return (h1('Содержание тома') + mark('{{ТАБЛИЦА:СОДЕРЖАНИЕ_ТОМА}}') + page_break())
+    return (para('Содержание тома', 'ContentsHead') + mark('{{ТАБЛИЦА:СОДЕРЖАНИЕ_ТОМА}}') + page_break())
 
 # Тома ПД: код, номер раздела, наименование, наполнение
 def vol_pz():
@@ -500,6 +518,23 @@ def vol_rd():
         mark('{{БЛОК:СОГЛАСОВАНИЕ_ВЛАДЕЛЬЦА}}'),
     ]
 
+def vol_vk():
+    return [
+        h1('1 Сведения об исходных данных'),
+        mark('{{ТАБЛИЦА:ВК_ИСТОЧНИК}}'),
+        h1('2 Результаты входного контроля'),
+        tx('Контроль выполнен при импорте исходных данных в программу {{ПРОГРАММА_РАСЧЁТА}}. Блокирующие замечания препятствуют выпуску проектной документации до их устранения; предупреждения подлежат учёту в проектных решениях; сведения приводятся для информации.'),
+        mark('{{ТАБЛИЦА:ВК_ИТОГ}}'),
+        mark('{{ТАБЛИЦА:ВК_ЗАМЕЧАНИЯ}}'),
+        h1('3 Запрос владельцу инфраструктуры'),
+        mark('{{ТАБЛИЦА:ВК_ЗАПРОС_ВЛАДЕЛЬЦУ}}'),
+        h1('4 Запрос пользователю инфраструктуры'),
+        mark('{{ТАБЛИЦА:ВК_ЗАПРОС_ПОЛЬЗОВАТЕЛЮ}}'),
+        h1('5 Заключение'),
+        mark('{{БЛОК:ВК_ЗАКЛЮЧЕНИЕ}}'),
+        tx('Главный инженер проекта ________________ {{ГИП_ФИО}}'),
+    ]
+
 VOLUMES = [
     # file, код, № раздела, наименование, pd?, builder
     ('tpl_pz.docx',  'ПЗ',  '1',  'Раздел 1. Пояснительная записка', True, vol_pz),
@@ -512,6 +547,7 @@ VOLUMES = [
     ('tpl_tbe.docx', 'ТБЭ', '8',  'Раздел 8. Требования к обеспечению безопасной эксплуатации линейного объекта', True, vol_tbe),
     ('tpl_sm.docx',  'СМ',  '9',  'Раздел 9. Смета на строительство', True, vol_sm),
     ('tpl_id.docx',  'ИД',  '10', 'Раздел 10. Иная документация', True, vol_id),
+    ('tpl_vk.docx',  'ВК',  '',   'Лист входного контроля исходных данных', 'vk', vol_vk),
     ('tpl_rd.docx',  'ЛКС', '',   'Линейно-кабельные сооружения. Размещение ВОЛС на опорах ВЛ. Общие данные и ведомости', False, vol_rd),
 ]
 
@@ -532,6 +568,9 @@ def styles_xml():
             + st('ListDash', 'PD Перечисление', '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr><w:spacing w:after="40"/><w:ind w:left="1060" w:hanging="351"/><w:jc w:val="both"/>')
             + st('Heading1', 'heading 1', '<w:keepNext/><w:spacing w:before="240" w:after="120"/><w:ind w:firstLine="709"/>', '<w:b/><w:sz w:val="28"/><w:szCs w:val="28"/>', nxt='Body', outline=0)
             + st('Heading2', 'heading 2', '<w:keepNext/><w:spacing w:before="180" w:after="80"/><w:ind w:firstLine="709"/>', '<w:b/>', nxt='Body', outline=1)
+            + st('ContentsHead', 'PD Заголовок содержания', '<w:keepNext/><w:spacing w:before="120" w:after="240"/><w:jc w:val="center"/>', '<w:b/><w:sz w:val="28"/><w:szCs w:val="28"/>', nxt='Body')
+            + st('TOC1', 'toc 1', f'<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="{tw(172)}"/></w:tabs><w:spacing w:after="40"/>', nxt='Body')
+            + st('TOC2', 'toc 2', f'<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="{tw(172)}"/></w:tabs><w:spacing w:after="40"/><w:ind w:left="284"/>', nxt='Body')
             + st('Marker', 'PD Поле-заполнитель', '<w:spacing w:before="60" w:after="60"/>', '<w:color w:val="1F5F99"/><w:sz w:val="20"/><w:shd w:val="clear" w:color="auto" w:fill="E7EFF7"/>')
             + st('Hint', 'PD Подсказка', '<w:spacing w:after="60"/><w:ind w:left="709"/>', '<w:i/><w:color w:val="8A5A00"/><w:sz w:val="20"/>')
             + st('TitleSmall', 'PD Титул', '<w:spacing w:after="60"/><w:jc w:val="center"/>', '<w:sz w:val="24"/>')
@@ -606,8 +645,8 @@ def sect_main():
             '<w:titlePg/></w:sectPr>')
 
 def build(fname, code, num, vtitle, pd, fn):
-    fields_note = ''
-    body = (title_page(vtitle, pd)
+    stage = 'ВХОДНОЙ КОНТРОЛЬ ИСХОДНЫХ ДАННЫХ' if pd == 'vk' else None
+    body = (title_page(vtitle, pd is True, stage)
             + f'<w:p><w:pPr>{sect_title()}</w:pPr></w:p>'
             + contents_block()
             + ''.join(fn())

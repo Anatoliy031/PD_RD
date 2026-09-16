@@ -124,7 +124,7 @@ function fillPart(xml, data, report, partName) {
 
   /* 1. Условия и маркеры — только прямые абзацы тела */
   var kids = Array.prototype.slice.call(body.childNodes);
-  var stack = [];
+  var stack = [], tocAt = null;
   kids.forEach(function (n) {
     if (n.nodeType !== 1) return;
     var isP = n.localName === 'p';
@@ -140,6 +140,9 @@ function fillPart(xml, data, report, partName) {
     if (m && m[1] === 'КОНЕЦ') { stack.pop(); body.removeChild(n); return; }
     if (hidden) { if (n.localName !== 'sectPr' && !n.getElementsByTagNameNS(W, 'sectPr').length) body.removeChild(n); return; }
     if (isP && st === 'Hint') { body.removeChild(n); return; }
+    if (m && m[1] === 'ТАБЛИЦА' && m[2] === 'СОДЕРЖАНИЕ_ТОМА' && !(data.tables && data.tables[m[2]])) {
+      tocAt = n; return;
+    }
     if (m && m[1] === 'ТАБЛИЦА') {
       var spec = data.tables && data.tables[m[2]];
       var nodes = spec ? tableNodes(doc, spec)
@@ -161,6 +164,31 @@ function fillPart(xml, data, report, partName) {
     }
   });
   if (stack.length) report.errors.push(partName + ': не закрыт блок {{ЕСЛИ}}');
+
+  /* Содержание тома — поле TOC; номера листов проставляет Word при открытии
+     (в документе включено обновление полей) */
+  if (tocAt) {
+    var heads = [];
+    Array.prototype.forEach.call(body.childNodes, function (n) {
+      if (n.nodeType === 1 && n.localName === 'p') {
+        var s = styleOf(n);
+        if (s === 'Heading1' || s === 'Heading2') heads.push({ lvl: s === 'Heading1' ? 1 : 2, text: textOf(n) });
+      }
+    });
+    var fc = function (type) { return el(doc, 'r', null, [el(doc, 'fldChar', { fldCharType: type })]); };
+    var instr = el(doc, 'instrText'); instr.setAttribute('xml:space', 'preserve'); instr.textContent = ' TOC \\o "1-2" \\h \\z \\u ';
+    var ps = heads.map(function (h) {
+      var tab = el(doc, 'r', null, [el(doc, 'tab')]);
+      return el(doc, 'p', null, [el(doc, 'pPr', null, [el(doc, 'pStyle', { val: 'TOC' + h.lvl })]), textRun(doc, h.text), tab]);
+    });
+    if (!ps.length) ps = [paraNode(doc, DASH, 'Body')];
+    ps[0].insertBefore(fc('separate'), ps[0].childNodes[1]);
+    ps[0].insertBefore(el(doc, 'r', null, [instr]), ps[0].childNodes[1]);
+    ps[0].insertBefore(fc('begin'), ps[0].childNodes[1]);
+    ps[ps.length - 1].appendChild(fc('end'));
+    ps.forEach(function (x) { body.insertBefore(x, tocAt); });
+    body.removeChild(tocAt);
+  }
 
   /* 2. Отметка неутверждённого шифра */
   if (data.approved) {
@@ -257,6 +285,7 @@ function dataFromProject(d, tpl) {
     'ПРОГРАММА_РАСЧЁТА': 'PD_RD ' + (global.PDRD ? global.PDRD.VERSION : ''),
     'КЛАССЫ_КВ': kvs.map(function (x) { return String(x).replace('.', ','); }).join(' и '),
     'ОПОР_ВСЕГО': d.poles.length ? String(d.poles.length) : '',
+    'ПРОТЯЖЁННОСТЬ_КМ': d.lengthKm ? String(d.lengthKm).replace('.', ',') : '',
     'РАЙОН_ВЕТЕР': c.windRegion, 'ДАВЛЕНИЕ_ВЕТРА_ПА': c.windPa, 'РАЙОН_ГОЛОЛЁД': c.iceRegion,
     'СТЕНКА_ГОЛОЛЁДА_ММ': c.iceMm, 'ТИП_МЕСТНОСТИ': c.terrain, 'СЕЙСМИЧНОСТЬ': c.seismic, 'КЛИМАТ_ИСТОЧНИК': c.source,
     'КАБЕЛЬ_МАРКА': cb.mark, 'КАБЕЛЬ_ОВ': cb.fibers,
@@ -300,8 +329,50 @@ function dataFromProject(d, tpl) {
   };
 }
 
+/* Лист входного контроля */
+var INTAKE_TPL = { file:'tpl_vk.docx', code:'ВК', num:null, pd:false, title:'Лист входного контроля исходных данных' };
+function dataForIntake(d) {
+  var base = dataFromProject(d, INTAKE_TPL);
+  base.fields['СТАДИЯ'] = 'П';
+  var r = d.basis.report13 || {}, f = d.intake || [];
+  var lv = { stop: 'блокирует выпуск', warn: 'учесть в проекте', info: 'для сведения' };
+  var recs = 0; d.poles.forEach(function (p) { recs += (p.lines || []).length; });
+  base.tables['ВК_ИСТОЧНИК'] = { cols: [{ t: 'Сведения', w: 70 }, { t: 'Значение', w: 105 }], rows: [
+    ['Отчёт по п. 13 Правил', (r.number || '') + (r.date ? ' от ' + ru(r.date) : '')],
+    ['Запрос пользователя инфраструктуры', r.request ? (r.request.number || '') + (r.request.date ? ' от ' + ru(r.request.date) : '') : ''],
+    ['Источник и способ получения', r.source || ''],
+    ['Контрольная сумма SHA-256 входного файла', r.sha256 || ''],
+    ['Дата импорта', r.imported ? ru(r.imported) : ''],
+    ['Объект', d.passport.object],
+    ['Оператор связи (пользователь инфраструктуры)', d.passport.operator],
+    ['Подрядчик оператора', d.passport.contractor || 'не указан'],
+    ['Записей опор в отчёте', String(recs)],
+    ['Физических опор после объединения совместных', String(d.poles.length)],
+    ['Линий', String(d.lines.length)]
+  ] };
+  var cnt = { stop: 0, warn: 0, info: 0 };
+  f.forEach(function (x) { cnt[x.lv]++; });
+  base.tables['ВК_ИТОГ'] = { caption: 'Таблица — Сводка', cols: [{ t: 'Уровень', w: 100 }, { t: 'Количество', w: 75 }],
+    rows: [['Блокирующие замечания', cnt.stop], ['Предупреждения', cnt.warn], ['Сведения', cnt.info]].map(function (x) { return [x[0], String(x[1])]; }) };
+  base.tables['ВК_ЗАМЕЧАНИЯ'] = { caption: 'Таблица — Замечания', cols: [
+      { t: '№', w: 8 }, { t: 'Проверка', w: 32 }, { t: 'Содержание', w: 95 }, { t: 'Уровень', w: 22 }, { t: 'Кому запрос', w: 18 }],
+    rows: f.map(function (x, i) { return [String(i + 1), x.n + '. ' + x.title, x.text + (x.fix ? ' Действие: ' + x.fix + '.' : ''), lv[x.lv], x.ask || '—']; }) };
+  function asks(who) {
+    var rows = f.filter(function (x) { return x.ask === who && x.lv !== 'info'; })
+      .map(function (x, i) { return [String(i + 1), x.text, x.where || '—']; });
+    return { cols: [{ t: '№', w: 8 }, { t: 'Что требуется представить или уточнить', w: 122 }, { t: 'Где', w: 45 }],
+             rows: rows.length ? rows : [['—', 'Запросов нет', '—']] };
+  }
+  base.tables['ВК_ЗАПРОС_ВЛАДЕЛЬЦУ'] = asks('владельцу');
+  base.tables['ВК_ЗАПРОС_ПОЛЬЗОВАТЕЛЮ'] = asks('пользователю');
+  base.blocks['ВК_ЗАКЛЮЧЕНИЕ'] = [cnt.stop
+    ? 'Исходные данные содержат ' + cnt.stop + ' блокирующих замечаний. Разработка проектных решений по затронутым опорам и расчёты, для которых данные не представлены, выполняются после получения ответов на запросы. Выпуск проектной документации до устранения блокирующих замечаний не допускается.'
+    : 'Блокирующих замечаний нет. Исходные данные достаточны для разработки проектной документации с учётом предупреждений.'];
+  return base;
+}
+
 global.PDRD_DOCX = {
-  TEMPLATES: TEMPLATES, fillDocx: fillDocx, inspectDocx: inspectDocx,
+  TEMPLATES: TEMPLATES, INTAKE_TPL: INTAKE_TPL, dataForIntake: dataForIntake, fillDocx: fillDocx, inspectDocx: inspectDocx,
   listFields: listFields, brokenFields: brokenFields, fillPart: fillPart,
   dataFromProject: dataFromProject
 };
