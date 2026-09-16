@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка ядра — PD_RD</title>
+<link rel="stylesheet" href="pdrd-ui.css?v=0.1.0">
+<style>
+table{border-collapse:collapse;width:100%;font-size:14px}
+td,th{border-bottom:1px solid var(--line-s);padding:7px 8px;text-align:left;vertical-align:top}
+td.r{white-space:nowrap;font-weight:600}
+td.r.ok{color:var(--ok)} td.r.bad{color:var(--bad)}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Автотесты</span></div>
+  <nav aria-label="Разделы"><a href="index.html">Комплект</a><a class="on" href="tests.html">Проверка ядра</a></nav>
+</div></header>
+<main class="wrap">
+  <section class="panel">
+    <h2>Проверка ядра</h2>
+    <p class="sub">Тесты работают на временной копии хранилища и не трогают ваш проект и данные АРМ ППО.</p>
+    <div id="sum"></div>
+    <table><thead><tr><th>Проверка</th><th>Результат</th><th>Подробности</th></tr></thead><tbody id="rows"></tbody></table>
+  </section>
+</main>
+<script>
+/* Подменяем хранилище до загрузки ядра: реальный localStorage не используется. */
+(function(){
+  var mem = {};
+  window.__mem = mem;
+  var fake = {
+    getItem:function(k){ return Object.prototype.hasOwnProperty.call(mem,k) ? mem[k] : null; },
+    setItem:function(k,v){ mem[k] = String(v); },
+    removeItem:function(k){ delete mem[k]; }
+  };
+  try { Object.defineProperty(window, 'localStorage', { value: fake, configurable: true }); }
+  catch(e){ window.__fakeFailed = true; }
+})();
+</script>
+<script src="pdrd-core.js?v=0.1.0"></script>
+<script src="pdrd-tests.js?v=0.1.0"></script>
+</body>
+</html>

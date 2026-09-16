@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ПД и РД ВОЛС на ВЛ — PD_RD</title>
+<link rel="stylesheet" href="pdrd-ui.css?v=0.1.0">
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
+  <nav aria-label="Разделы">
+    <a class="on" href="index.html">Комплект</a>
+    <a href="tests.html">Проверка ядра</a>
+    <a href="https://github.com/Anatoliy031/PD_RD/blob/main/Karta_poley_V25.md">Карта полей</a>
+  </nav>
+</div></header>
+
+<main class="wrap">
+  <section class="sheet" aria-labelledby="h1">
+    <h1 id="h1">Проектная и рабочая документация на размещение ВОЛС на опорах ВЛ 0,4–110 кВ</h1>
+    <p class="lead">Инструмент собирает комплект ПД и РД из отчёта по п. 13 Правил, выпущенного АРМ ППО,
+      технического задания оператора и проектных решений. Сейчас готово ядро: проект хранится
+      в этом браузере, резервная копия сохраняется в файл.</p>
+    <div class="stamp" aria-label="Основная надпись проекта">
+      <div class="stamp-roles">
+        <div><span>Разраб.</span><b id="sRazrab"></b></div>
+        <div><span>Пров.</span><b id="sProv"></b></div>
+        <div><span>Н. контр.</span><b id="sNk"></b></div>
+        <div><span>ГИП</span><b id="sGip"></b></div>
+      </div>
+      <div class="stamp-main">
+        <div class="stamp-code" id="sCode"></div>
+        <div class="stamp-name" id="sName"></div>
+        <div class="stamp-cells">
+          <div><small>Стадия</small><span id="sStage"></span></div>
+          <div><small>Версия</small><span id="sVer"></span></div>
+          <div><small>Сохранено</small><span id="sSaved"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="cols">
+    <section class="panel" aria-labelledby="hProj">
+      <h2 id="hProj">Проект в этом браузере</h2>
+      <p class="sub">Данные не покидают устройство. Перед очисткой истории браузера сохраните копию.</p>
+      <div id="projState"></div>
+      <div class="btns">
+        <button class="btn primary" id="bSave">Сохранить копию в файл</button>
+        <label class="btn" for="fLoad">Открыть копию из файла</label>
+        <input type="file" id="fLoad" accept=".pdrd,.json,application/json" hidden>
+        <button class="btn danger" id="bReset">Начать новый проект</button>
+      </div>
+      <div id="projMsg"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="hV25">
+      <h2 id="hV25">Данные АРМ ППО</h2>
+      <p class="sub">Чтение осмотра из АРМ ППО, открытого на том же сайте. PD_RD эти данные не изменяет.</p>
+      <div class="btns"><button class="btn" id="bV25">Проверить наличие данных</button></div>
+      <div id="v25Msg"></div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="hGaps">
+    <h2 id="hGaps">Что мешает выпуску</h2>
+    <p class="sub">Предварительный перечень. Полный аудит появится на этапе 7.</p>
+    <ul class="gaps" id="gaps"></ul>
+  </section>
+
+  <section class="panel" aria-labelledby="hSt">
+    <h2 id="hSt">Ход разработки</h2>
+    <ol class="stages">
+      <li><div><b>Анализ АРМ ППО и карта полей</b><small>Структура данных V25, сборка DOCX, аудит; разбор пилотного отчёта</small></div><span class="st work">на утверждении</span></li>
+      <li><div><b>Нормы и шаблоны томов</b><small>Реестр норм с датами проверки; шаблоны 10 разделов ПД и РД</small></div><span class="st">далее</span></li>
+      <li><div><b>Модель, импорт, входной контроль</b><small>Пилот: 909 записей → 898 физических опор</small></div><span class="st">далее</span></li>
+      <li><div><b>Расчёты</b><small>Нагрузки ПУЭ-7, уравнение состояния, моменты на опоры</small></div><span class="st">далее</span></li>
+      <li><div><b>Решения по опорам и пролётам</b></div><span class="st">далее</span></li>
+      <li><div><b>Графическая часть</b><small>10 типов листов со штампами</small></div><span class="st">далее</span></li>
+      <li><div><b>Спецификация и ведомость объёмов работ</b></div><span class="st">далее</span></li>
+      <li><div><b>Аудит и режим проверки</b></div><span class="st">далее</span></li>
+      <li><div><b>Выпуск: DOCX, PDF, XLSX, KMZ, DXF</b><small>Пилотный комплект по Новоджерелиевской</small></div><span class="st">далее</span></li>
+    </ol>
+  </section>
+
+  <p class="foot">PD_RD <span id="fVer"></span> · инструкция разработки — <a href="https://github.com/Anatoliy031/PD_RD/blob/main/CLAUDE.md">CLAUDE.md</a></p>
+</main>
+
+<script src="pdrd-core.js?v=0.1.0"></script>
+<script>
+(function(){
+  var P = window.PDRD, $ = function(id){ return document.getElementById(id); };
+  function txt(el, v, empty){ el.textContent = v || empty || '—'; el.classList.toggle('empty', !v); }
+  function fmt(iso){ if(!iso) return ''; var d=new Date(iso); return d.toLocaleDateString('ru-RU')+' '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}); }
+  function msg(host, cls, t){ host.innerHTML = ''; var d=document.createElement('div'); d.className='msg '+cls; d.textContent=t; host.appendChild(d); }
+
+  function render(){
+    var d = P.load(), p = d.passport, s = p.signs;
+    txt($('sRazrab'), s.razrab, 'не указан');
+    txt($('sProv'), s.prov, 'не указан');
+    txt($('sNk'), s.nkontr, 'не указан');
+    txt($('sGip'), s.gip);
+    var code = $('sCode');
+    code.textContent = (p.shifr && p.shifrApproved) ? p.shifr : 'Шифр не утверждён';
+    code.classList.toggle('draft', !(p.shifr && p.shifrApproved));
+    $('sName').textContent = p.object || 'Объект не задан — появится после импорта отчёта по п. 13';
+    $('sStage').textContent = p.stage;
+    $('sVer').textContent = P.VERSION;
+    $('sSaved').textContent = d.saved ? fmt(d.saved) : 'не сохранялся';
+    $('fVer').textContent = P.VERSION;
+    $('projState').innerHTML = '';
+    msg($('projState'), P.hasProject() ? 'ok' : 'warn',
+      P.hasProject() ? 'Проект сохранён в браузере. Опор: ' + d.poles.length + ', линий: ' + d.lines.length + '.'
+                     : 'Проект ещё не создан. Он появится после импорта отчёта или при первом сохранении.');
+    var ul = $('gaps'); ul.innerHTML = '';
+    P.passportGaps(d).forEach(function(g){ var li=document.createElement('li'); li.textContent=g; ul.appendChild(li); });
+  }
+
+  $('bSave').onclick = function(){
+    try { P.save(); var n = P.exportJson(); msg($('projMsg'),'ok','Копия сохранена: ' + n); render(); }
+    catch(e){ msg($('projMsg'),'bad','Копию сохранить не удалось: ' + e.message); }
+  };
+  $('fLoad').onchange = function(ev){
+    var f = ev.target.files[0]; if(!f) return;
+    P.importJson(f).then(function(){ msg($('projMsg'),'ok','Проект открыт из файла «' + f.name + '».'); render(); })
+      .catch(function(e){ msg($('projMsg'),'bad', e.message); });
+    ev.target.value = '';
+  };
+  $('bReset').onclick = function(){
+    if (!confirm('Удалить текущий проект из браузера? Сначала сохраните копию, если она нужна.')) return;
+    P.reset(); msg($('projMsg'),'ok','Создан новый пустой проект.'); render();
+  };
+  $('bV25').onclick = function(){
+    var r = P.readV25(), h = $('v25Msg');
+    if (!r) return msg(h,'warn','Данных АРМ ППО на этом сайте нет. Они появятся, когда оба инструмента будут опубликованы на одном адресе (anab.gitverse.site). До этого проект будет загружаться из файла резервной копии АРМ ППО — эта функция появится на шаге «Модель, импорт, входной контроль».');
+    if (r.error) return msg(h,'bad', r.error);
+    msg(h,'ok','Найден осмотр АРМ ППО ' + r.version + ': «' + (r.object||'без наименования') + '», опор — ' + r.poles + ', линий — ' + r.lines + (r.report ? ', отчёт ' + r.report : '') + '.');
+  };
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden){ P.refresh(); render(); } });
+  render();
+})();
+</script>
+</body>
+</html>
