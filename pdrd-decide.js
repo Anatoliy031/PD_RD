@@ -171,9 +171,28 @@ function propose(d, opt) {
     p.design = Object.assign({}, cur, des);
     out.changed++;
   });
+  fixSpans(d, info, opt);
   placeSleeves(d, info, prm);
   placeDampers(d, info, prm);
   return out;
+}
+
+/* Пролёты с невыполненным габаритом или расстоянием до проводов:
+   дополнительная опора у промежуточного конца пролёта (мероприятие Е.1) */
+function fixSpans(d, info, opt) {
+  var byKey = {};
+  d.poles.forEach(function (p) { (p.lines || []).forEach(function (l) { byKey[l.lineId + '|' + l.num] = p; }); });
+  ((d.calcResult || {}).spans || []).forEach(function (s) {
+    if (s.status !== 'exceed') return;
+    var a = byKey[s.line + '|' + s.from], b = byKey[s.line + '|' + s.to];
+    var ends = [a, b].filter(Boolean);
+    if (ends.some(function (p) { return p.design && p.design.decision === 'extra'; })) return;
+    var pick = ends.filter(function (p) { return !info[p.id].anchor; })[0] || ends[0];
+    if (!pick || !pick.design || (pick.design.by === 'проектировщик' && !(opt && opt.overwrite))) return;
+    if (['place', 'recheck'].indexOf(pick.design.decision) < 0) return;
+    pick.design.decision = 'extra';
+    pick.design.why.push('пролёт ' + s.from + ' — ' + s.to + ': ' + (s.reasons || []).join('; ') + ' — дополнительная опора в пролёте');
+  });
 }
 
 /* Муфты и запасы: в точках ветвления трассы и по строительной длине.

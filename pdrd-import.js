@@ -130,6 +130,13 @@ function fromV25Object(o) {
     });
   });
   ex.lines = Object.keys(lines).map(function (k) { return lines[k]; });
+  /* пролёт «до предыдущей» — по записи предыдущей опоры (в V25 хранится только «до следующей») */
+  var byNum = {};
+  ex.poles.forEach(function (p) { byNum[p.line_id + '|' + p.num] = p; });
+  ex.poles.forEach(function (p) {
+    var q = p.prev && byNum[p.line_id + '|' + p.prev];
+    if (q && q.next === p.num) p.span_prev_m = q.span_next_m;
+  });
   (o.wires || []).forEach(function (w) {
     ex.wires.push({ mark: str(w.mark), n: num(w.n), kv: kvOf(w.kv), kv_raw: str(w.kv), h_m: num(w.h), tension_kn: num(w.tens), belong: str(w.belong) });
   });

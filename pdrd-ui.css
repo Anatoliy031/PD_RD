@@ -82,6 +82,7 @@ ol.stages li small{color:var(--muted)}
 .btn:hover{background:var(--blue-l)}
 .btn.primary{background:var(--blue);color:#fff}
 .btn.primary:hover{background:var(--blue-d)}
+.btn:disabled{opacity:.45;cursor:not-allowed;background:#fff;color:var(--muted);border-color:var(--line)}
 .btn.danger{border-color:var(--bad);color:var(--bad)}
 
 /* сообщения */

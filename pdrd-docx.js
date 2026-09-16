@@ -280,7 +280,7 @@ function dataFromProject(d, tpl) {
     'СРО_НАИМ': l.sro.name, 'СРО_РЕГ_НОМЕР': l.sro.regNumber, 'СРО_ВЫПИСКА_ДАТА': ru(l.sro.extractDate),
     'ТЗ_НОМЕР': b.tz.number, 'ТЗ_ДАТА': ru(b.tz.date), 'ТЗ_НАИМ': b.tz.title || '',
     'ТУ_НОМЕР': b.tu.number, 'ТУ_ДАТА': ru(b.tu.date),
-    'ОТЧЁТ_П13_НОМЕР': b.report13.number, 'ОТЧЁТ_П13_ДАТА': ru(b.report13.date), 'ОТЧЁТ_П13_ХЭШ': b.report13.sha256,
+    'ОТЧЁТ_П13_НОМЕР': b.report13.number, 'ОТЧЁТ_П13_ДАТА': ru(b.report13.date), 'ОТЧЁТ_П13_ХЭШ': b.report13.sha256 || (b.report13.number ? 'не определена — данные получены из АРМ ППО без файла' : ''),
     'ДОГОВОР_ПИР_НОМЕР': b.contract ? b.contract.number : '', 'ДОГОВОР_ПИР_ДАТА': b.contract ? ru(b.contract.date) : '',
     'ПРОГРАММА_РАСЧЁТА': 'PD_RD ' + (global.PDRD ? global.PDRD.VERSION : ''),
     'КЛАССЫ_КВ': kvs.map(function (x) { return String(x).replace('.', ','); }).join(' и '),
@@ -372,7 +372,7 @@ function dataFromProject(d, tpl) {
              ['Масса, кг/км', cb.mass_kg_km], ['Допустимая растягивающая нагрузка, кН', cb.t_allow_kn],
              ['Статус данных', cb.approved ? 'из утверждённого каталога' : 'по отчёту п. 13 — подтвердить паспортом изготовителя']] };
   }
-  return {
+  var out = {
     approved: approved,
     fields: fields,
     cond: {
@@ -383,6 +383,8 @@ function dataFromProject(d, tpl) {
     },
     tables: tables, blocks: blocks
   };
+  if (global.PDRD_TEXTS) global.PDRD_TEXTS.extend(out, d, tpl);
+  return out;
 }
 
 /* Лист входного контроля */

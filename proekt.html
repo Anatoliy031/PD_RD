@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Паспорт проекта — PD_RD</title>
+<link rel="stylesheet" href="pdrd-ui.css?v=1.0.0">
+<style>
+.frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px 14px}
+.frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+.frm input,.frm select,.frm textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:15px;background:#fff}
+.frm textarea{min-height:64px;resize:vertical}
+.frm .wide{grid-column:1/-1}
+.frm .hint{font-size:12px;color:var(--muted);margin-top:3px}
+.frm .miss input,.frm .miss select,.frm .miss textarea{border-color:#E3B0B0;background:#FFF8F8}
+.frm .cb{display:flex;gap:8px;align-items:center;font-weight:600;font-size:14px;margin-top:22px}
+.frm .cb input{width:auto}
+.tbl{overflow-x:auto;margin-top:8px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{border-bottom:1px solid var(--line-s);padding:5px 6px;text-align:left;vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:12.5px}
+td input,td textarea{width:100%;min-width:70px;padding:5px 6px;border:1px solid var(--line-s);border-radius:4px;font-size:13.5px;font-family:inherit}
+.bar{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line-s);padding:10px 16px;display:flex;gap:10px;align-items:center;z-index:5}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
+  <nav aria-label="Разделы" id="nav"></nav>
+</div></header>
+<main class="wrap">
+  <div id="forms"></div>
+  <section class="panel">
+    <h2>Пересечения и сближения</h2>
+    <p class="sub">Требуемый габарит и основание указываются по нормам на пересекаемый объект. Расчётный габарит подставляется из расчёта пролёта.</p>
+    <div class="tbl"><table><thead><tr><th>Линия</th><th>Опора от</th><th>Опора до</th><th>Объект</th><th>Вид</th><th>Требуемый габарит, м</th><th>Основание</th><th></th></tr></thead><tbody id="tCross"></tbody></table></div>
+    <div class="btns"><button class="btn" id="bAddCross" type="button">Добавить пересечение</button>
+    <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="cNoCross"> Трасса проверена: пересечений нет</label></div>
+  </section>
+  <section class="panel">
+    <h2>Метрологическое обеспечение</h2>
+    <p class="sub">Контролируемые параметры по ПТ-029-4, п. 14: значение, допуск, НД, методика, периодичность, средство измерений.</p>
+    <div class="tbl"><table><thead><tr><th>Параметр</th><th>Значение</th><th>Допуск</th><th>НД</th><th>Методика</th><th>Периодичность</th><th>Этап</th><th>СИ</th><th></th></tr></thead><tbody id="tMet"></tbody></table></div>
+    <div class="btns"><button class="btn" id="bMetDef" type="button">Заполнить типовым перечнем</button><button class="btn" id="bMetAdd" type="button">Добавить параметр</button></div>
+  </section>
+</main>
+<div class="bar"><button class="btn primary" id="bSave" type="button">Сохранить паспорт</button><span id="msg"></span></div>
+<script src="pdrd-core.js?v=1.0.0"></script>
+<script src="pdrd-norms.js?v=1.0.0"></script>
+<script src="pdrd-profiles.js?v=1.0.0"></script>
+<script src="pdrd-marks.js?v=1.0.0"></script>
+<script src="pdrd-texts.js?v=1.0.0"></script>
+<script>
+(function(){
+  var P = PDRD, $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  var d = P.load();
+  d.specParams = d.specParams || {}; d.posParams = d.posParams || {};
+  function get(path){ return path.split('.').reduce(function(o,k){ return o == null ? undefined : o[k]; }, d); }
+  function set(path, v){ var ks = path.split('.'), o = d; ks.slice(0,-1).forEach(function(k){ if (o[k] == null) o[k] = {}; o = o[k]; }); o[ks[ks.length-1]] = v; }
+  var TRI = [['', 'не решено'], ['yes', 'требуется'], ['no', 'не требуется']];
+  var profs = PDRD_PROFILES.LIST.map(function(p){ return [p.id, p.title]; });
+  var SEC = [
+    ['Обозначение и стадия', [
+      ['passport.shifr','Шифр проекта','text',{req:1,hint:'Утверждается в филиале; до утверждения выпуск заблокирован'}],
+      ['passport.shifrApproved','Шифр утверждён','check'], ['passport.marksApproved','Марки комплектов утверждены','check'],
+      ['passport.releaseDate','Дата выпуска','date',{req:1}]]],
+    ['Объект и стороны', [
+      ['passport.object','Наименование объекта','area',{req:1,wide:1}], ['passport.place','Местоположение','text',{req:1,wide:1}],
+      ['passport.owner','Владелец инфраструктуры','text',{req:1}], ['passport.branch','Филиал / подразделение','text',{req:1}],
+      ['passport.operator','Оператор связи (пользователь инфраструктуры)','text',{req:1}], ['passport.contractor','Подрядчик оператора','text'],
+      ['passport.designCustomer','Заказчик проектной документации','text',{req:1}], ['profile.operator','Профиль требований оператора','select',{opts:profs}],
+      ['passport.responsibility','Уровень ответственности (ГОСТ 27751-2014)','text',{hint:'По умолчанию — нормальный'}]]],
+    ['Подписи', [
+      ['passport.signs.gip','ГИП','text',{req:1}], ['passport.signs.gipPost','Должность ГИП','text'],
+      ['passport.signs.razrab','Разработал','text',{req:1}], ['passport.signs.prov','Проверил','text',{req:1}], ['passport.signs.nkontr','Н. контроль','text',{req:1}]]],
+    ['Основание', [
+      ['basis.tz.number','ТЗ — номер','text',{req:1}], ['basis.tz.date','ТЗ — дата','date',{req:1}], ['basis.tz.title','ТЗ — наименование','text',{hint:'например: на разработку проектной и рабочей документации'}],
+      ['basis.contract.number','Договор ПИР — номер','text'], ['basis.contract.date','Договор ПИР — дата','date'],
+      ['basis.tu.number','ТУ (письмо) владельца — номер','text'], ['basis.tu.date','ТУ — дата','date']]],
+    ['Членство в СРО', [
+      ['legal.sro.name','Наименование СРО','text',{req:1}], ['legal.sro.regNumber','Регистрационный номер','text',{req:1}], ['legal.sro.extractDate','Дата выписки из реестра','date',{req:1}]]],
+    ['Правовые решения', [
+      ['legal.permit.needed','Разрешение на строительство','tri'], ['legal.permit.ref','Основание (пункт нормы)','text',{wide:1,hint:'Обязательно при «не требуется»: статья ГрК РФ и пункт ПП РФ № 1816'}],
+      ['legal.dpt.needed','Документация по планировке территории','tri'], ['legal.dpt.ref','Основание (пункт нормы)','text',{wide:1}],
+      ['legal.expertise.needed','Экспертиза ПД','tri'], ['legal.expertise.kind','Вид экспертизы','text',{hint:'государственная / негосударственная'}], ['legal.expertise.ref','Основание','text',{wide:1}],
+      ['legal.land.text','Земельные участки','area',{wide:1,hint:'Сведения о категориях земель, сервитутах; для размещения на существующих опорах — обоснование отсутствия изъятия'}]]],
+    ['Изыскания и состав разделов', [
+      ['basis.surveys.done','Инженерные изыскания выполнены','check'], ['basis.surveys.reports','Реквизиты отчётов об изысканиях','text',{wide:1}],
+      ['basis.surveys.reason','Обоснование отсутствия изысканий','area',{wide:1}],
+      ['pdSwitches.ilo','Раздел 4 разрабатывается (шкафы, контейнеры, НРП)','check'],
+      ['pdSwitches.smeta','Раздел 9 «Смета»','tri'], ['smetaText','Пояснения к смете','area',{wide:1}],
+      ['routeAct','Акт выбора трассы (ВымпелКом)','area',{wide:1}]]],
+    ['Кабель: документы', [
+      ['cable.approved','Кабель и арматура выбраны из утверждённого каталога','check'], ['cable.maker','Изготовитель кабеля','text'],
+      ['cable.cert','Документ соответствия на кабель','text',{req:1}], ['cable.fibers','Число ОВ','num'],
+      ['cable.tracking','Класс трекингостойкости оболочки','text'], ['cable.serviceLife','Срок службы, лет','num'], ['cable.fireClass','Показатель пожарной опасности','text']]],
+    ['Параметры спецификации и ПОС', [
+      ['specParams.sagFactor','Коэффициент на провис и отходы','num',{hint:'По умолчанию 1,02; подтверждается проектировщиком'}],
+      ['specParams.reservesPerSleeve','Запасов на муфту, шт.','num',{hint:'По умолчанию 2 (по одному на каждый ввод)'}],
+      ['specParams.splicingPerEnd_m','Разделка на ввод, м','num'],
+      ['posParams.kmPerDay','Подвеска, км в рабочий день','num'], ['posParams.sleevesPerDay','Муфт в рабочий день','num'], ['posParams.prepDays','Подготовительные работы, р. д.','num']]]
+  ];
+  var host = $('forms');
+  SEC.forEach(function(sec){
+    var s = el('section','panel'); s.appendChild(el('h2','',sec[0]));
+    var f = el('div','frm');
+    sec[1].forEach(function(fd){
+      var path = fd[0], type = fd[2], o = fd[3] || {};
+      var w = el('div', o.wide ? 'wide' : ''), id = 'p_' + path.replace(/\./g,'_');
+      var v = get(path), inp;
+      if (type === 'check'){
+        var lab = el('label','cb'); inp = el('input'); inp.type = 'checkbox'; inp.id = id; inp.checked = !!v;
+        inp.onchange = function(){ set(path, inp.checked); };
+        lab.appendChild(inp); lab.appendChild(document.createTextNode(fd[1])); w.appendChild(lab); f.appendChild(w); return;
+      }
+      var l = el('label','',fd[1]); l.htmlFor = id; w.appendChild(l);
+      if (type === 'area'){ inp = el('textarea'); inp.value = v || ''; }
+      else if (type === 'select'){ inp = el('select'); o.opts.forEach(function(op){ var e = el('option','',op[1]); e.value = op[0]; if (v === op[0]) e.selected = true; inp.appendChild(e); }); }
+      else if (type === 'tri'){ inp = el('select'); TRI.forEach(function(op){ var e = el('option','',op[1]); e.value = op[0]; if ((v === true && op[0]==='yes') || (v === false && op[0]==='no') || ((v === null || v === undefined) && op[0]==='')) e.selected = true; inp.appendChild(e); }); }
+      else { inp = el('input'); inp.type = type === 'date' ? 'date' : 'text'; if (type === 'num') inp.inputMode = 'decimal'; inp.value = v === null || v === undefined ? '' : (type === 'num' ? String(v).replace('.', ',') : String(v).slice(0, type === 'date' ? 10 : 9999)); }
+      inp.id = id;
+      function mark(){ var val = get(path); w.classList.toggle('miss', !!o.req && (val === '' || val === null || val === undefined)); }
+      inp.onchange = function(){
+        var x = inp.value;
+        if (type === 'tri') x = x === 'yes' ? true : (x === 'no' ? false : null);
+        else if (type === 'num') { x = parseFloat(String(x).replace(',', '.')); if (!isFinite(x)) x = null; }
+        else if (type !== 'select') x = x.trim();
+        set(path, x); mark();
+      };
+      mark();
+      w.appendChild(inp); if (o.hint) w.appendChild(el('div','hint',o.hint));
+      f.appendChild(w);
+    });
+    s.appendChild(f); host.appendChild(s);
+  });
+
+  function rowsEditor(tbodyId, list, fields, remove){
+    var tb = $(tbodyId); tb.innerHTML = '';
+    list.forEach(function(item, i){
+      var tr = el('tr');
+      fields.forEach(function(k){ var td = el('td'), inp = el(k === 'method' || k === 'object' ? 'textarea' : 'input'); inp.value = item[k] == null ? '' : String(item[k]); inp.setAttribute('aria-label', k); inp.onchange = function(){ item[k] = inp.value.trim(); }; td.appendChild(inp); tr.appendChild(td); });
+      var td = el('td'), b = el('button','btn','×'); b.type = 'button'; b.setAttribute('aria-label','Удалить строку'); b.onclick = function(){ list.splice(i,1); remove(); }; td.appendChild(b); tr.appendChild(td);
+      tb.appendChild(tr);
+    });
+  }
+  function drawCross(){ rowsEditor('tCross', d.crossings, ['line','from','to','object','kind','h_req_m','ref'], drawCross); }
+  function drawMet(){ rowsEditor('tMet', d.metrology, ['param','value','tol','nd','method','period','stage','si'], drawMet); }
+  $('bAddCross').onclick = function(){ d.crossings.push({ line:'', from:'', to:'', object:'', kind:'', h_req_m:'', ref:'' }); drawCross(); };
+  $('cNoCross').checked = !!d.crossingsChecked; $('cNoCross').onchange = function(){ d.crossingsChecked = this.checked; };
+  $('bMetDef').onclick = function(){ if (d.metrology.length && !confirm('Заменить текущий перечень типовым?')) return; d.metrology = PDRD_TEXTS.defaultMetrology(d); drawMet(); };
+  $('bMetAdd').onclick = function(){ d.metrology.push({ param:'', value:'', tol:'', nd:'', method:'', period:'', stage:'', si:'' }); drawMet(); };
+  drawCross(); drawMet();
+  $('bSave').onclick = function(){
+    d.crossings.forEach(function(c){ var n = parseFloat(String(c.h_req_m).replace(',', '.')); c.h_req_m = isFinite(n) ? n : c.h_req_m; });
+    P.replaceAll(d); d = P.load();
+    var g = P.passportGaps(d);
+    $('msg').textContent = 'Сохранено. ' + (g.length ? 'Не заполнено: ' + g.length + ' (см. «Выпуск»).' : 'Паспорт заполнен.');
+  };
+})();
+</script>
+<script src="pdrd-nav.js?v=1.0.0"></script>
+</body>
+</html>

@@ -285,5 +285,27 @@ function run(d) {
   return res;
 }
 
-global.PDRD_DESIGN = { inputs: inputs, sections: sections, run: run, wiresFor: wiresFor };
+/* Сохранить результат расчёта в проекте (компактно) */
+function store(d, res) {
+  res = res || run(d);
+  d.calcResult = { at: res.at, app: global.PDRD ? global.PDRD.VERSION : '', summary: res.summary,
+    poles: res.poles.map(function (x) { return { id: x.id, status: x.status, reasons: x.reasons, warns: x.warns, M: x.M, Madm: x.Madm }; }),
+    sections: res.sections.map(function (s) { return { id: s.id, line: s.line, kv: s.kv, status: s.status, Lr: s.Lr, length: s.length, H0: s.solution ? s.solution.H0 : null, fVert: s.fVert, reasons: s.reasons }; }),
+    spans: res.spans.map(function (s) { return { section: s.section, line: s.line, from: s.from, to: s.to, L: s.L, status: s.status, clearance: s.clearance, wireDist: s.wireDist, fmax: s.fmax, reasons: s.reasons }; }),
+    missing: res.missing };
+  return res;
+}
+/* Расчёт → решения → пересчёт с принятыми высотами подвеса → уточнение решений */
+function solve(d, opt) {
+  var X = global.PDRD_DECIDE;
+  store(d);
+  if (!X) return d.calcResult;
+  X.propose(d, opt);
+  store(d);
+  X.propose(d);
+  var res = store(d);
+  return res;
+}
+
+global.PDRD_DESIGN = { inputs: inputs, sections: sections, run: run, wiresFor: wiresFor, store: store, solve: solve };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -4,28 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ПД и РД ВОЛС на ВЛ — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=0.6.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.0.0">
 </head>
 <body>
 <header class="top"><div class="top-in">
   <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
-  <nav aria-label="Разделы">
-    <a class="on" href="index.html">Комплект</a>
-    <a href="vhod.html">Исходные данные</a>
-    <a href="raschet.html">Расчёты</a>
-    <a href="resheniya.html">Решения</a>
-    <a href="shablony.html">Шаблоны</a>
-    <a href="normy.html">Нормы</a>
-    <a href="tests.html">Проверка ядра</a>
-    <a href="https://github.com/Anatoliy031/PD_RD/blob/main/Karta_poley_V25.md">Карта полей</a>
-  </nav>
+  <nav aria-label="Разделы" id="nav"></nav>
 </div></header>
 
 <main class="wrap">
   <section class="sheet" aria-labelledby="h1">
     <h1 id="h1">Проектная и рабочая документация на размещение ВОЛС на опорах ВЛ 0,4–110 кВ</h1>
     <p class="lead">Инструмент собирает комплект ПД и РД из отчёта по п. 13 Правил, выпущенного АРМ ППО,
-      технического задания оператора и проектных решений. Готово: импорт исходных данных с входным контролем, расчёты по ПУЭ-7, реестр норм, шаблоны томов.
+      технического задания оператора и проектных решений. Импорт отчёта по п. 13 с входным контролем, расчёты по ПУЭ-7, решения по опорам, чертежи, спецификация, аудит и выпуск комплекта (DOCX, PDF, DXF, XLSX, KMZ).
       Проект хранится в этом браузере, резервная копия сохраняется в файл.</p>
     <div class="stamp" aria-label="Основная надпись проекта">
       <div class="stamp-roles">
@@ -46,6 +37,12 @@
     </div>
   </section>
 
+  <section class="panel" aria-labelledby="hFlow">
+    <h2 id="hFlow">Порядок работы</h2>
+    <p class="sub">Шаги выполняются по порядку; состояние обновляется при открытии страницы.</p>
+    <ol class="stages" id="flow"></ol>
+  </section>
+
   <div class="cols">
     <section class="panel" aria-labelledby="hProj">
       <h2 id="hProj">Проект в этом браузере</h2>
@@ -55,6 +52,7 @@
         <button class="btn primary" id="bSave">Сохранить копию в файл</button>
         <label class="btn" for="fLoad">Открыть копию из файла</label>
         <input type="file" id="fLoad" accept=".pdrd,.json,application/json" hidden>
+        <button class="btn" id="bDemo">Открыть демо-проект</button>
         <button class="btn danger" id="bReset">Начать новый проект</button>
       </div>
       <div id="projMsg"></div>
@@ -63,65 +61,150 @@
     <section class="panel" aria-labelledby="hV25">
       <h2 id="hV25">Данные АРМ ППО</h2>
       <p class="sub">Импорт отчёта по п. 13 или резервной копии осмотра и входной контроль — на странице <a href="vhod.html">«Исходные данные»</a>. Здесь — проверка осмотра АРМ ППО на этом сайте; PD_RD его не изменяет.</p>
-      <div class="btns"><button class="btn" id="bV25">Проверить наличие данных</button></div>
+      <div class="btns"><button class="btn" id="bV25" type="button">Проверить наличие данных</button></div>
       <div id="v25Msg"></div>
     </section>
   </div>
 
-  <section class="panel" aria-labelledby="hGaps">
-    <h2 id="hGaps">Что мешает выпуску</h2>
-    <p class="sub">Предварительный перечень. Полный аудит появится на этапе 7.</p>
-    <ul class="gaps" id="gaps"></ul>
+  <section class="panel" aria-labelledby="hAudit">
+    <h2 id="hAudit">Аудит и выпуск</h2>
+    <p class="sub">Аудит проверяет комплектность ПД и СПДС, нормы ТТ № 282р, расчёты, метрологию, спецификацию, разделение Е.1/Е.2, реестр норм, требования оператора и сроки. Несоответствие блокирует выпуск; обход — только с обоснованием не короче 40 символов и Ф.И.О., решение печатается в листе внутреннего контроля.</p>
+    <div class="btns">
+      <button class="btn primary" id="bAudit" type="button">Выполнить аудит</button>
+      <button class="btn" id="bRelease" type="button" disabled>Выпустить комплект</button>
+      <button class="btn" id="bDraft" type="button">Сформировать черновой комплект</button>
+    </div>
+    <div id="auditMsg"></div>
+    <div id="auditList"></div>
   </section>
 
-  <section class="panel" aria-labelledby="hSt">
-    <h2 id="hSt">Ход разработки</h2>
-    <ol class="stages">
-      <li><div><b>Анализ АРМ ППО и карта полей</b><small>Структура данных V25, сборка DOCX, аудит; разбор пилотного отчёта</small></div><span class="st done">утверждено</span></li>
-      <li><div><b>Нормы и шаблоны томов</b><small>Реестр норм, состав ПД, требования операторов, шаблоны томов</small></div><span class="st done">готово</span></li>
-      <li><div><b>Модель, импорт, входной контроль</b><small>Пилот: 909 записей → 898 физических опор; лист входного контроля</small></div><span class="st done">готово</span></li>
-      <li><div><b>Расчёты</b><small>Нагрузки ПУЭ-7, уравнение состояния, монтажные таблицы, габариты, моменты на опоры</small></div><span class="st done">готово</span></li>
-      <li><div><b>Решения по опорам и пролётам</b><small>Выбор по развилкам, высота подвеса по свободным интервалам, узлы, муфты и запасы</small></div><span class="st done">готово</span></li>
-      <li><div><b>Графическая часть</b><small>10 типов листов со штампами</small></div><span class="st work">следующий</span></li>
-      <li><div><b>Спецификация и ведомость объёмов работ</b></div><span class="st">далее</span></li>
-      <li><div><b>Аудит и режим проверки</b></div><span class="st">далее</span></li>
-      <li><div><b>Выпуск: DOCX, PDF, XLSX, KMZ, DXF</b><small>Пилотный комплект по Новоджерелиевской</small></div><span class="st">далее</span></li>
-    </ol>
-  </section>
-
-  <p class="foot">PD_RD <span id="fVer"></span> · инструкция разработки — <a href="https://github.com/Anatoliy031/PD_RD/blob/main/CLAUDE.md">CLAUDE.md</a></p>
+  <p class="foot">PD_RD <span id="fVer"></span> · <a href="Instrukciya_PD_RD.docx">инструкция пользователя</a> · <a href="https://github.com/Anatoliy031/PD_RD/blob/main/README.md">описание и изменения</a></p>
 </main>
 
-<script src="pdrd-core.js?v=0.6.0"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="pdrd-core.js?v=1.0.0"></script>
+<script src="pdrd-norms.js?v=1.0.0"></script>
+<script src="pdrd-profiles.js?v=1.0.0"></script>
+<script src="pdrd-marks.js?v=1.0.0"></script>
+<script src="pdrd-refs-v25.js?v=1.0.0"></script>
+<script src="pdrd-import.js?v=1.0.0"></script>
+<script src="pdrd-calc.js?v=1.0.0"></script>
+<script src="pdrd-design.js?v=1.0.0"></script>
+<script src="pdrd-decide.js?v=1.0.0"></script>
+<script src="pdrd-spec.js?v=1.0.0"></script>
+<script src="pdrd-texts.js?v=1.0.0"></script>
+<script src="pdrd-docx.js?v=1.0.0"></script>
+<script src="pdrd-svg.js?v=1.0.0"></script>
+<script src="pdrd-dxf.js?v=1.0.0"></script>
+<script src="pdrd-pdf.js?v=1.0.0"></script>
+<script src="pdrd-xlsx.js?v=1.0.0"></script>
+<script src="pdrd-kmz.js?v=1.0.0"></script>
+<script src="pdrd-audit.js?v=1.0.0"></script>
+<script src="pdrd-release.js?v=1.0.0"></script>
+<script src="pdrd-demo.js?v=1.0.0"></script>
 <script>
 (function(){
   var P = window.PDRD, $ = function(id){ return document.getElementById(id); };
   function txt(el, v, empty){ el.textContent = v || empty || '—'; el.classList.toggle('empty', !v); }
   function fmt(iso){ if(!iso) return ''; var d=new Date(iso); return d.toLocaleDateString('ru-RU')+' '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}); }
-  function msg(host, cls, t){ host.innerHTML = ''; var d=document.createElement('div'); d.className='msg '+cls; d.textContent=t; host.appendChild(d); }
+  function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function msg(host, cls, t){ host.innerHTML = ''; host.appendChild(el('div', 'msg '+cls, t)); }
+  function save(blob, name){ var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 10000); }
+  var lastAudit = null;
 
   function render(){
     var d = P.load(), p = d.passport, s = p.signs;
-    txt($('sRazrab'), s.razrab, 'не указан');
-    txt($('sProv'), s.prov, 'не указан');
-    txt($('sNk'), s.nkontr, 'не указан');
-    txt($('sGip'), s.gip);
-    var code = $('sCode');
-    code.textContent = (p.shifr && p.shifrApproved) ? p.shifr : 'Шифр не утверждён';
-    code.classList.toggle('draft', !(p.shifr && p.shifrApproved));
+    txt($('sRazrab'), s.razrab, 'не указан'); txt($('sProv'), s.prov, 'не указан'); txt($('sNk'), s.nkontr, 'не указан'); txt($('sGip'), s.gip);
+    var code = $('sCode'); var ok = p.shifr && p.shifrApproved;
+    code.textContent = ok ? p.shifr : 'Шифр не утверждён'; code.classList.toggle('draft', !ok);
     $('sName').textContent = p.object || 'Объект не задан — появится после импорта отчёта по п. 13';
-    $('sStage').textContent = p.stage;
-    $('sVer').textContent = P.VERSION;
-    $('sSaved').textContent = d.saved ? fmt(d.saved) : 'не сохранялся';
-    $('fVer').textContent = P.VERSION;
-    $('projState').innerHTML = '';
-    msg($('projState'), P.hasProject() ? 'ok' : 'warn',
-      P.hasProject() ? 'Проект сохранён в браузере. Опор: ' + d.poles.length + ', линий: ' + d.lines.length + '.'
-                     : 'Проект ещё не создан. Он появится после импорта отчёта или при первом сохранении.');
-    var ul = $('gaps'); ul.innerHTML = '';
-    P.passportGaps(d).forEach(function(g){ var li=document.createElement('li'); li.textContent=g; ul.appendChild(li); });
+    $('sStage').textContent = p.stage; $('sVer').textContent = P.VERSION;
+    $('sSaved').textContent = d.saved ? fmt(d.saved) : 'не сохранялся'; $('fVer').textContent = P.VERSION;
+    msg($('projState'), P.hasProject() ? 'ok' : 'warn', P.hasProject() ? (d.demo ? 'ДЕМО-проект. ' : '') + 'Опор: ' + d.poles.length + ', линий: ' + d.lines.length + '.' : 'Проект ещё не создан: загрузите исходные данные или откройте демо-проект.');
+    var decided = d.poles.filter(function(x){ return x.design && x.design.decision; }).length;
+    var gaps = P.passportGaps(d).length;
+    var steps = [
+      ['vhod.html','Исходные данные и входной контроль', d.poles.length ? 'опор: ' + d.poles.length + ', замечаний: ' + (d.intake||[]).length : 'не загружены', d.poles.length ? 'done' : 'work'],
+      ['proekt.html','Паспорт проекта', gaps ? 'не заполнено: ' + gaps : 'заполнен', gaps ? 'work' : 'done'],
+      ['raschet.html','Расчёты', d.calcResult ? 'обосновано ' + d.calcResult.summary.ok + ', нет данных ' + d.calcResult.summary.blocked + ', не выполнено ' + d.calcResult.summary.exceed : 'не выполнены', d.calcResult && !d.calcResult.summary.blocked ? 'done' : 'work'],
+      ['resheniya.html','Решения по опорам', decided ? 'решений: ' + decided + ' из ' + d.poles.length : 'не приняты', decided && decided === d.poles.length ? 'done' : 'work'],
+      ['skhemy.html','Чертежи','строятся из решений', decided ? 'done' : ''],
+      ['specifikaciya.html','Спецификация, ведомости, трасса','формируются из решений', decided ? 'done' : ''],
+      ['index.html#hAudit','Аудит и выпуск', d.releases && d.releases.length ? 'выпусков: ' + d.releases.length : 'не выпускался', d.releases && d.releases.length ? 'done' : '']
+    ];
+    var ol = $('flow'); ol.innerHTML = '';
+    steps.forEach(function(x){
+      var li = el('li'), dv = el('div'), a = el('a','',x[1]); a.href = x[0]; var b = el('b'); b.appendChild(a); dv.appendChild(b); dv.appendChild(el('small','',x[2])); li.appendChild(dv);
+      li.appendChild(el('span','st ' + x[3], x[3] === 'done' ? 'готово' : (x[3] === 'work' ? 'требует действий' : '—'))); ol.appendChild(li);
+    });
   }
 
+  function templatesInfo(d){
+    return PDRD_RELEASE.fillAll(d).then(function(vols){ return vols.map(function(v){ return { code:v.tpl.code, missing:v.missing.filter(function(k){ return !/^ТАБЛИЦА:(ВЕДОМОСТЬ_ЛИСТОВ|ПЕРЕСЕЧЕНИЯ)$/.test(k); }) }; }); });
+  }
+  function audit(){
+    var d = P.load();
+    msg($('auditMsg'), 'warn', 'Аудит: заполнение шаблонов и проверки…');
+    return templatesInfo(d).then(function(tp){
+      var items = PDRD_AUDIT.run(d, { templates: tp }), g = PDRD_AUDIT.gate(items);
+      d.audit = d.audit || {}; d.audit.items = items; d.audit.at = new Date().toISOString();
+      P.replaceAll(d);
+      lastAudit = { items: items, gate: g };
+      drawAudit();
+      return lastAudit;
+    }).catch(function(e){ msg($('auditMsg'), 'bad', 'Аудит не выполнен: ' + e.message); });
+  }
+  function drawAudit(){
+    var items = lastAudit.items, g = PDRD_AUDIT.gate(items);
+    msg($('auditMsg'), g.ok ? 'ok' : 'bad', g.ok ? 'Шлюз открыт: блокирующих несоответствий нет (' + g.warns + ' предупреждений). Выпуск разрешён.' : 'Выпуск заблокирован: открытых несоответствий — ' + g.open.length + ' (предупреждений — ' + g.warns + ').');
+    $('bRelease').disabled = !g.ok;
+    var host = $('auditList'); host.innerHTML = '';
+    var groups = {}; items.forEach(function(x){ (groups[x.group] = groups[x.group] || []).push(x); });
+    Object.keys(groups).forEach(function(gname){
+      var list = groups[gname], st = list.filter(function(x){ return x.lv === 'stop' && !x.override; }).length;
+      var det = el('details'); det.open = st > 0 && st <= 15;
+      det.appendChild(el('summary','', gname + ' — ' + (st ? 'блокирующих ' + st : 'без блокирующих') + ', всего ' + list.length));
+      list.forEach(function(x){
+        var row = el('div','msg ' + (x.lv === 'stop' ? (x.override ? 'ok' : 'bad') : 'warn'));
+        row.appendChild(el('div','', x.text + (x.ref ? ' (' + x.ref + ')' : '')));
+        if (x.override) row.appendChild(el('small','', 'Решение: ' + x.override.who + ' — ' + x.override.reason));
+        else if (x.lv === 'stop') {
+          var b = el('button','btn','Принять решение об обходе'); b.type = 'button'; b.style.marginTop = '6px';
+          b.onclick = function(){
+            var reason = prompt('Обоснование (не короче ' + PDRD_AUDIT.MIN_REASON + ' символов):'); if (reason === null) return;
+            var who = prompt('Ф.И.О. принявшего решение (например, Куличкин Е.В.):', P.load().passport.signs.gip || ''); if (who === null) return;
+            var d = P.load();
+            try { PDRD_AUDIT.override(d, x, reason, who); P.replaceAll(d); x.override = d.audit.overrides.filter(function(o){ return o.key === x.key; })[0]; drawAudit(); }
+            catch(e){ alert(e.message); }
+          };
+          row.appendChild(b);
+        }
+        det.appendChild(row);
+      });
+      host.appendChild(det);
+    });
+  }
+  function release(draft){
+    var d = P.load();
+    var run = draft ? Promise.resolve(null) : audit();
+    run.then(function(a){
+      if (!draft && !(a && a.gate.ok)) return;
+      d = P.load();
+      msg($('auditMsg'), 'warn', 'Сборка комплекта…');
+      return PDRD_RELEASE.build(d, { draft: draft, onStep: function(s){ msg($('auditMsg'), 'warn', 'Сборка: ' + s + '…'); } }).then(function(r){
+        save(r.blob, r.name);
+        if (!draft){ d.releases = d.releases || []; d.releases.push({ at: new Date().toISOString(), files: r.files, app: P.VERSION, by: d.passport.signs.gip }); P.replaceAll(d); }
+        msg($('auditMsg'), 'ok', (draft ? 'Черновой комплект' : 'Комплект') + ' сформирован: ' + r.files + ' файлов (' + r.name + ').' + (r.pdfErr ? ' PDF чертежей не сформирован: ' + r.pdfErr + '.' : ''));
+        render();
+      });
+    }).catch(function(e){ msg($('auditMsg'), 'bad', 'Ошибка сборки: ' + e.message); });
+  }
+
+  $('bAudit').onclick = audit;
+  $('bRelease').onclick = function(){ release(false); };
+  $('bDraft').onclick = function(){ release(true); };
   $('bSave').onclick = function(){
     try { P.save(); var n = P.exportJson(); msg($('projMsg'),'ok','Копия сохранена: ' + n); render(); }
     catch(e){ msg($('projMsg'),'bad','Копию сохранить не удалось: ' + e.message); }
@@ -132,19 +215,26 @@
       .catch(function(e){ msg($('projMsg'),'bad', e.message); });
     ev.target.value = '';
   };
+  $('bDemo').onclick = function(){
+    if (P.hasProject() && P.load().poles.length && !confirm('Текущий проект будет заменён демо-проектом. Сохраните копию, если она нужна. Продолжить?')) return;
+    P.replaceAll(PDRD_DEMO.build()); msg($('projMsg'),'ok','Открыт демо-проект с вымышленными данными: импорт, расчёт и решения уже выполнены.'); render();
+  };
   $('bReset').onclick = function(){
     if (!confirm('Удалить текущий проект из браузера? Сначала сохраните копию, если она нужна.')) return;
     P.reset(); msg($('projMsg'),'ok','Создан новый пустой проект.'); render();
   };
   $('bV25').onclick = function(){
     var r = P.readV25(), h = $('v25Msg');
-    if (!r) return msg(h,'warn','Данных АРМ ППО на этом сайте нет. Они появятся, когда оба инструмента будут опубликованы на одном адресе (anab.gitverse.site). До этого загружайте отчёт (.docx) или резервную копию осмотра (.json) на странице «Исходные данные».');
+    if (!r) return msg(h,'warn','Данных АРМ ППО на этом сайте нет. Загрузите отчёт (.docx) или резервную копию осмотра (.json) на странице «Исходные данные».');
     if (r.error) return msg(h,'bad', r.error);
     msg(h,'ok','Найден осмотр АРМ ППО ' + r.version + ': «' + (r.object||'без наименования') + '», опор — ' + r.poles + ', линий — ' + r.lines + (r.report ? ', отчёт ' + r.report : '') + '.');
   };
   document.addEventListener('visibilitychange', function(){ if(!document.hidden){ P.refresh(); render(); } });
   render();
+  var d0 = P.load();
+  if (d0.audit && d0.audit.items && d0.audit.items.length){ lastAudit = { items: d0.audit.items }; drawAudit(); }
 })();
 </script>
+<script src="pdrd-nav.js?v=1.0.0"></script>
 </body>
 </html>

@@ -542,6 +542,87 @@ if (DC && IM) {
   });
 }
 
+/* ---------------------------------------------------------- комплект: демо-проект */
+var DM = window.PDRD_DEMO;
+if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
+  var demo = null;
+  t('Демо-проект: импорт → расчёт → решения', function(){
+    demo = DM.build();
+    eq(demo.poles.length, 31, 'опор'); eq(demo.calcResult.summary.blocked, 0, 'без пробелов данных');
+    eq(demo.poles.every(function(p){ return p.design && p.design.decision; }), true, 'решения');
+    return JSON.stringify(demo.calcResult.summary);
+  });
+  t('Итерация: после уточнения высот нормы пролётов обеспечены или закрыты мероприятием', function(){
+    var bad = PDRD_AUDIT.run(demo).filter(function(x){ return x.lv === 'stop' && /Пролёт/.test(x.text); });
+    eq(bad.length, 0); return 'нарушений пролётов без мероприятий нет';
+  });
+  t('Спецификация: кабель ≥ трассы × k + запасы, бирки = узлы', function(){
+    var sp = PDRD_SPEC.build(demo), L = sp.lengths;
+    eq(L.total_m >= Math.floor(L.route_m * 1.02 + L.reserves_m), true, 'длина');
+    var nodes = Object.keys(sp.totals.nodes).reduce(function(a, k){ return a + sp.totals.nodes[k]; }, 0);
+    eq(sp.items.filter(function(x){ return /Бирка/.test(x.name); })[0].qty, nodes, 'бирки');
+    eq(sp.items.filter(function(x){ return /Зажим натяжной/.test(x.name); })[0].qty, 2 * (sp.totals.nodes['А2'] || 0) + (sp.totals.nodes['А1'] || 0) + 3 * (sp.totals.nodes['АО'] || 0) + 2 * (sp.totals.nodes['С'] || 0), 'натяжные');
+    return L.total_m + ' м кабеля';
+  });
+  t('ВОР согласована со спецификацией', function(){
+    var sp = PDRD_SPEC.build(demo), b = PDRD_SPEC.bor(demo, sp);
+    var km = b.filter(function(x){ return /Подвеска/.test(x.name); })[0].qty;
+    near(km * 1000, sp.lengths.route_m, 1, 'км трассы');
+    return b.length + ' позиций';
+  });
+  t('Чертежи: все листы с рамкой, штампом и номерами', function(){
+    var sh = PDRD_SVG.sheets(demo);
+    eq(sh.length >= 8, true, 'листов');
+    sh.forEach(function(s, i){ eq(s.meta.num, i + 1, 'номер'); if (!s.p.some(function(e){ return e.l === 'ШТАМП'; })) throw new Error('нет штампа на листе ' + (i + 1)); });
+    var svg = PDRD_SVG.toSvg(sh[0]); eq(/^<svg[\s\S]*<\/svg>$/.test(svg), true, 'SVG');
+    return sh.length + ' листов';
+  });
+  t('DXF R12: заголовок, кодировка, слои, объекты', function(){
+    var sh = PDRD_SVG.sheets(demo)[0], txt = PDRD_DXF.toDxf(sh), pr = PDRD_DXF.parse(txt);
+    eq(/AC1009/.test(txt), true, 'версия'); eq(/ANSI_1251/.test(txt), true, 'кодировка'); eq(pr.eof, true, 'EOF');
+    eq(PDRD_SVG.LAYERS.every(function(l){ return pr.layers.indexOf(l) >= 0; }), true, 'слои');
+    var n = sh.p.filter(function(e){ return e.t === 'line'; }).length; eq(pr.entities.LINE, n, 'линии');
+    eq(pr.entities.TEXT, sh.p.filter(function(e){ return e.t === 'text' && !e.wm; }).length, 'тексты');
+    var b = PDRD_DXF.cp1251('Опора № 5 — ё'); eq(b[0], 0xCE, 'О'); eq(b[6], 0xB9, '№'); eq(b[b.length - 1], 0xB8, 'ё');
+    return JSON.stringify(pr.entities);
+  });
+  t('KML: трасса, опоры, координаты', function(){
+    var k = PDRD_KMZ.kml(demo);
+    eq((k.match(/<Placemark>/g) || []).length > 31, true, 'объектов'); eq(/<LineString>/.test(k), true, 'линии');
+    return (k.match(/<Point>/g) || []).length + ' опор';
+  });
+  t('Тома: ПЗ, ТКР и РД заполняются без пробелов таблиц (кроме утверждаемых данных)', function(){
+    var D = PDRD_DOCX, codes = ['ПЗ', 'ТКР', 'ЛКС'];
+    codes.forEach(function(c){
+      var tpl = D.TEMPLATES.filter(function(x){ return x.code === c; })[0], data = D.dataFromProject(demo, tpl);
+      ['ИСХОДНЫЕ_ДАННЫЕ','ЛИНИИ','ТЭП','Е1','НОРМЫ','СОСТАВ_ПД','ОПОРЫ','СПЕЦИФИКАЦИЯ','ВОР','МУФТЫ','УЗЛЫ','ПРОЛЁТЫ','НАГРУЗКИ','ВЕДОМОСТЬ_ЛИСТОВ'].forEach(function(k){ if (!data.tables[k]) throw new Error(c + ': нет таблицы ' + k); });
+      ['ОБОСНОВАНИЕ_РАЗРЕШЕНИЯ','ИЗЫСКАНИЯ','ТРАССА','ИСПОЛНИТЕЛЬНАЯ','ВЫВОД_ПО_ОПОРАМ'].forEach(function(k){ if (!(data.blocks[k] || []).length) throw new Error(c + ': нет текста ' + k); });
+    });
+    return 'таблицы и тексты сформированы';
+  });
+  t('Аудит демо: блокируют только утверждение шифра и каталога', function(){
+    var st = PDRD_AUDIT.run(demo).filter(function(x){ return x.lv === 'stop'; });
+    eq(st.every(function(x){ return /Шифр|Марки|каталог/.test(x.text); }), true, st.map(function(x){ return x.text; }).join('; '));
+    return st.length + ' блокирующих';
+  });
+  t('Шлюз: обход требует обоснования ≥ 40 символов и Ф.И.О.', function(){
+    var d0 = DM.build(), it = PDRD_AUDIT.run(d0).filter(function(x){ return x.lv === 'stop'; })[0];
+    var e1 = 0; try { PDRD_AUDIT.override(d0, it, 'коротко', 'Куличкин Е.В.'); } catch(e){ e1++; }
+    try { PDRD_AUDIT.override(d0, it, 'Шифр присваивается после согласования с заказчиком, выпуск для проверки', 'кто-то'); } catch(e){ e1++; }
+    eq(e1, 2, 'отказы');
+    PDRD_AUDIT.override(d0, it, 'Шифр присваивается после согласования с заказчиком, выпуск для проверки', 'Куличкин Е.В.');
+    var again = PDRD_AUDIT.run(d0).filter(function(x){ return x.key === it.key; })[0];
+    eq(!!again.override, true, 'решение применено');
+    var all = PDRD_AUDIT.run(d0); all.forEach(function(x){ if (x.lv === 'stop' && !x.override) PDRD_AUDIT.override(d0, x, 'Решение принято для проверки шлюза выпуска в автотесте программы', 'Куличкин Е.В.'); });
+    eq(PDRD_AUDIT.gate(PDRD_AUDIT.run(d0)).ok, true, 'шлюз открыт');
+    return 'работает';
+  });
+  t('Проверка чужого проекта: замечания со ссылками', function(){
+    var r = PDRD_AUDIT.remarks([{ group:'Г', lv:'stop', text:'Т', ref:'ТТ № 282р' }, { group:'Г', lv:'warn', text:'У', ref:'' }]);
+    eq(r.length, 2); eq(r[0].level, 'обязательно к устранению'); return 'лист замечаний';
+  });
+}
+
 var ok = res.filter(function(r){ return r.ok; }).length;
 var rows = document.getElementById('rows');
 res.forEach(function(r){

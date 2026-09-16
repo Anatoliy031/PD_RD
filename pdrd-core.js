@@ -5,7 +5,7 @@
 (function (global) {
 'use strict';
 
-var VERSION = '0.6.0';
+var VERSION = '1.0.0';
 var SCHEMA  = 'pdrd-project/1';
 var PREFIX  = 'pdrd_';
 var KEY     = 'pdrd_project_v1';
@@ -57,17 +57,28 @@ function blank() {
     },
     profile: { operator: 'rostelecom-b2c-gpon', switches: {} },
     basis: {
-      tz: { number: '', date: '' },
+      tz: { number: '', date: '', title: '' },
       tu: { number: '', date: '' },
+      contract: { number: '', date: '' },
       report13: { number: '', date: '', sha256: '', source: '' },
-      surveys: { done: false, reason: '' }
+      surveys: { done: false, reports: '', reason: '' }
     },
     legal: {
       dpt:        { needed: null, ref: '' },
       permit:     { needed: null, ref: '' },
-      expertise:  { needed: null, ref: '' },
+      expertise:  { needed: null, kind: '', ref: '' },
+      land:       { text: '' },
       sro: { member: true, name: '', regNumber: '', extractDate: '' }
     },
+    pdSwitches: { ilo: false, smeta: null },
+    crossings: [],      // {line, from, to, object, kind, h_req_m, ref, note}
+    metrology: [],      // {param, value, tol, nd, method, period, stage, si}
+    designDefaults: {},
+    decideParams: {},
+    wiresByKv: {},
+    stands: {},
+    poleCapacity: {},
+    releases: [],
     climate: { windRegion: '', windPa: null, iceRegion: '', iceMm: null,
                terrain: '', seismic: null, source: '', confirmed: false },
     cable: { mark: '', fibers: null, d_mm: null, mass_kg_km: null,
@@ -216,6 +227,15 @@ function passportGaps(d) {
   if (!sro.name || !sro.regNumber || !sro.extractDate) g.push('Не заполнены реквизиты СРО');
   if (!d.basis.report13.number) g.push('Не указан отчёт по п. 13 Правил');
   if (!d.cable.approved) g.push('Кабель не выбран из утверждённого каталога');
+  if (!p.releaseDate) g.push('Не указана дата выпуска');
+  if (!p.designCustomer) g.push('Не указан заказчик проектной документации');
+  if (!d.basis.tz.number) g.push('Не указано техническое задание');
+  ['dpt', 'permit', 'expertise'].forEach(function (k) {
+    var x = d.legal[k];
+    if (x.needed === null || x.needed === undefined) g.push('Не решён вопрос: ' + { dpt: 'документация по планировке территории', permit: 'разрешение на строительство', expertise: 'экспертиза проектной документации' }[k]);
+    else if (x.needed === false && !String(x.ref || '').trim()) g.push('Нет ссылки на норму: ' + { dpt: 'почему ДПТ не требуется', permit: 'почему разрешение не требуется', expertise: 'почему экспертиза не требуется' }[k]);
+  });
+  if (!d.basis.surveys.done && !String(d.basis.surveys.reason || '').trim()) g.push('Нет обоснования отсутствия инженерных изысканий');
   return g;
 }
 

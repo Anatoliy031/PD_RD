@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Расчёты — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=0.6.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.0.0">
 <style>
 .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 14px}
 .frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
@@ -37,15 +37,7 @@ small.r{display:block;color:var(--muted);font-size:12px}
 <body>
 <header class="top"><div class="top-in">
   <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
-  <nav aria-label="Разделы">
-    <a href="index.html">Комплект</a>
-    <a href="vhod.html">Исходные данные</a>
-    <a class="on" href="raschet.html">Расчёты</a>
-    <a href="resheniya.html">Решения</a>
-    <a href="shablony.html">Шаблоны</a>
-    <a href="normy.html">Нормы</a>
-    <a href="tests.html">Проверка ядра</a>
-  </nav>
+  <nav aria-label="Разделы" id="nav"></nav>
 </div></header>
 <main class="wrap">
   <div id="noProj" class="panel" hidden><h2>Проект не загружен</h2><p class="sub">Сначала загрузите исходные данные на странице <a href="vhod.html">«Исходные данные»</a>.</p></div>
@@ -91,11 +83,11 @@ small.r{display:block;color:var(--muted);font-size:12px}
   </section>
   </div>
 </main>
-<script src="pdrd-core.js?v=0.6.0"></script>
-<script src="pdrd-norms.js?v=0.6.0"></script>
-<script src="pdrd-refs-v25.js?v=0.6.0"></script>
-<script src="pdrd-calc.js?v=0.6.0"></script>
-<script src="pdrd-design.js?v=0.6.0"></script>
+<script src="pdrd-core.js?v=1.0.0"></script>
+<script src="pdrd-norms.js?v=1.0.0"></script>
+<script src="pdrd-refs-v25.js?v=1.0.0"></script>
+<script src="pdrd-calc.js?v=1.0.0"></script>
+<script src="pdrd-design.js?v=1.0.0"></script>
 <script>
 (function(){
   var P = PDRD, C = PDRD_CALC, $ = function(id){ return document.getElementById(id); };
@@ -201,11 +193,7 @@ small.r{display:block;color:var(--muted);font-size:12px}
     var t0 = performance.now();
     var res = PDRD_DESIGN.run(d);
     state.res = res;
-    d.calcResult = { at: res.at, app: P.VERSION, summary: res.summary,
-      poles: res.poles.map(function(p){ return { id:p.id, status:p.status, reasons:p.reasons, warns:p.warns, M:p.M, Madm:p.Madm }; }),
-      sections: res.sections.map(function(s){ return { id:s.id, line:s.line, status:s.status, Lr:s.Lr, length:s.length, H0:s.solution ? s.solution.H0 : null, fVert:s.fVert, reasons:s.reasons }; }),
-      spans: res.spans.map(function(s){ return { section:s.section, line:s.line, from:s.from, to:s.to, L:s.L, status:s.status, clearance:s.clearance, wireDist:s.wireDist, fmax:s.fmax, reasons:s.reasons }; }),
-      missing: res.missing };
+    PDRD_DESIGN.store(d, res);
     P.replaceAll(d); d = P.load();
     var m = $('runMsg'); m.innerHTML = '';
     m.appendChild(el('div', 'msg ok', 'Сохранено и рассчитано за ' + Math.round(performance.now() - t0) + ' мс.'));
@@ -344,5 +332,6 @@ small.r{display:block;color:var(--muted);font-size:12px}
   if (d.calcResult) { var m = $('runMsg'); m.appendChild(el('div','msg ok','Последний расчёт: ' + new Date(d.calcResult.at).toLocaleString('ru-RU') + '. Нажмите «Сохранить и рассчитать», чтобы обновить.')); }
 })();
 </script>
+<script src="pdrd-nav.js?v=1.0.0"></script>
 </body>
 </html>

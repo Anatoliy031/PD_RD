@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Решения по опорам — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=0.6.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.0.0">
 <style>
 .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px}
 .frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
@@ -39,15 +39,7 @@ small.r{display:block;color:var(--muted);font-size:12px}
 <body>
 <header class="top"><div class="top-in">
   <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
-  <nav aria-label="Разделы">
-    <a href="index.html">Комплект</a>
-    <a href="vhod.html">Исходные данные</a>
-    <a href="raschet.html">Расчёты</a>
-    <a class="on" href="resheniya.html">Решения</a>
-    <a href="shablony.html">Шаблоны</a>
-    <a href="normy.html">Нормы</a>
-    <a href="tests.html">Проверка ядра</a>
-  </nav>
+  <nav aria-label="Разделы" id="nav"></nav>
 </div></header>
 <main class="wrap">
   <div id="noProj" class="panel" hidden><h2>Проект не загружен</h2><p class="sub">Сначала загрузите исходные данные на странице <a href="vhod.html">«Исходные данные»</a> и выполните <a href="raschet.html">расчёт</a>.</p></div>
@@ -82,13 +74,13 @@ small.r{display:block;color:var(--muted);font-size:12px}
   </section>
   </div>
 </main>
-<script src="pdrd-core.js?v=0.6.0"></script>
-<script src="pdrd-norms.js?v=0.6.0"></script>
-<script src="pdrd-profiles.js?v=0.6.0"></script>
-<script src="pdrd-refs-v25.js?v=0.6.0"></script>
-<script src="pdrd-calc.js?v=0.6.0"></script>
-<script src="pdrd-design.js?v=0.6.0"></script>
-<script src="pdrd-decide.js?v=0.6.0"></script>
+<script src="pdrd-core.js?v=1.0.0"></script>
+<script src="pdrd-norms.js?v=1.0.0"></script>
+<script src="pdrd-profiles.js?v=1.0.0"></script>
+<script src="pdrd-refs-v25.js?v=1.0.0"></script>
+<script src="pdrd-calc.js?v=1.0.0"></script>
+<script src="pdrd-design.js?v=1.0.0"></script>
+<script src="pdrd-decide.js?v=1.0.0"></script>
 <script>
 (function(){
   var P = PDRD, X = PDRD_DECIDE, C = PDRD_CALC, $ = function(id){ return document.getElementById(id); };
@@ -205,9 +197,11 @@ small.r{display:block;color:var(--muted);font-size:12px}
   function msg(cls, t){ var m = $('msg'); m.innerHTML = ''; m.appendChild(el('div','msg '+cls,t)); }
   $('bProp').onclick = function(){
     if (!d.calcResult) msg('warn','Расчёт ещё не выполнен — решения строятся только по входному контролю. Выполните расчёт на странице «Расчёты».');
-    var r = X.propose(d, { overwrite: $('cOver').checked });
+    var before = X.totals(d);
+    PDRD_DESIGN.solve(d, { overwrite: $('cOver').checked });
+    var r = { changed: d.poles.filter(function(p){ return p.design && p.design.by === 'авто'; }).length, kept: d.poles.filter(function(p){ return p.design && p.design.by === 'проектировщик'; }).length };
     P.replaceAll(d); d = P.load();
-    if (d.calcResult) msg('ok','Предложено решений: ' + r.changed + '; ручных сохранено: ' + r.kept + '.');
+    if (d.calcResult) msg('ok','Решения предложены и расчёт уточнён с принятыми высотами подвеса. Автоматических решений: ' + r.changed + '; ручных сохранено: ' + r.kept + '.');
     refresh();
   };
   $('bSave').onclick = function(){ P.replaceAll(d); d = P.load(); msg('ok','Решения сохранены.'); refresh(); };
@@ -215,5 +209,6 @@ small.r{display:block;color:var(--muted);font-size:12px}
   params(); lines(); refresh();
 })();
 </script>
+<script src="pdrd-nav.js?v=1.0.0"></script>
 </body>
 </html>

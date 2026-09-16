@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Чертежи — PD_RD</title>
+<link rel="stylesheet" href="pdrd-ui.css?v=1.0.0">
+<style>
+.sheets{display:grid;gap:18px}
+.sh{background:#fff;border:1px solid var(--line-s);border-radius:6px;padding:10px}
+.sh h3{font-size:14px;margin:0 0 6px}
+.sh .svg{overflow:auto;border:1px solid var(--line-s)}
+.sh .svg svg{width:100%;height:auto;display:block}
+.toc{columns:2;column-gap:30px;font-size:14px;margin:6px 0 0;padding-left:20px}
+@media (max-width:700px){.toc{columns:1}}
+@media print{
+  @page{size:A3 landscape;margin:0}
+  body{background:#fff}.top,.panel,.bar{display:none!important}
+  .wrap{padding:0;max-width:none}
+  .sh{border:0;padding:0;margin:0;page-break-after:always;break-after:page}
+  .sh h3{display:none}.sh .svg{border:0;overflow:visible}
+  .sh .svg svg{width:420mm;height:297mm}
+}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
+  <nav aria-label="Разделы" id="nav"></nav>
+</div></header>
+<main class="wrap">
+  <section class="panel">
+    <h2>Графическая часть</h2>
+    <p class="sub">Листы А3 с рамкой и основной надписью формы 3 строятся из данных проекта. PDF и DXF формируются из одного описания листа; DXF — формат R12, открывается в AutoCAD, nanoCAD, КОМПАС, LibreCAD.</p>
+    <div class="btns">
+      <button class="btn primary" id="bBuild" type="button">Построить листы</button>
+      <button class="btn" id="bPdf" type="button" disabled>Скачать PDF</button>
+      <button class="btn" id="bDxf" type="button" disabled>Скачать DXF (архив)</button>
+      <button class="btn" id="bPrint" type="button" disabled>Печать</button>
+    </div>
+    <div id="msg"></div>
+    <ol class="toc" id="toc"></ol>
+  </section>
+  <div class="sheets" id="sheets"></div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="pdrd-core.js?v=1.0.0"></script>
+<script src="pdrd-norms.js?v=1.0.0"></script>
+<script src="pdrd-profiles.js?v=1.0.0"></script>
+<script src="pdrd-marks.js?v=1.0.0"></script>
+<script src="pdrd-refs-v25.js?v=1.0.0"></script>
+<script src="pdrd-calc.js?v=1.0.0"></script>
+<script src="pdrd-design.js?v=1.0.0"></script>
+<script src="pdrd-decide.js?v=1.0.0"></script>
+<script src="pdrd-spec.js?v=1.0.0"></script>
+<script src="pdrd-texts.js?v=1.0.0"></script>
+<script src="pdrd-docx.js?v=1.0.0"></script>
+<script src="pdrd-svg.js?v=1.0.0"></script>
+<script src="pdrd-dxf.js?v=1.0.0"></script>
+<script src="pdrd-pdf.js?v=1.0.0"></script>
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function msg(cls, t){ var m = $('msg'); m.innerHTML = ''; m.appendChild(el('div','msg '+cls,t)); }
+  function save(data, name, type){ var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: type })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 8000); }
+  var list = [], d = null;
+  $('bBuild').onclick = function(){
+    d = PDRD.load();
+    if (!d.poles.length){ msg('warn','Проект пуст — загрузите исходные данные.'); return; }
+    var t0 = performance.now();
+    list = PDRD_SVG.sheets(d);
+    var host = $('sheets'); host.innerHTML = ''; var toc = $('toc'); toc.innerHTML = '';
+    list.forEach(function(sh){
+      toc.appendChild(el('li','', sh.meta.title + (sh.meta.scale ? ', М 1:' + sh.meta.scale : '')));
+      var box = el('div','sh'); box.appendChild(el('h3','', 'Лист ' + sh.meta.num + '. ' + sh.meta.title));
+      var sv = el('div','svg'); sv.innerHTML = PDRD_SVG.toSvg(sh); box.appendChild(sv); host.appendChild(box);
+    });
+    msg(list.length ? 'ok' : 'warn', list.length ? 'Построено листов: ' + list.length + ' за ' + Math.round(performance.now() - t0) + ' мс.' : 'Листы не построены: примите решения по опорам и выполните расчёт.');
+    ['bPdf','bDxf','bPrint'].forEach(function(b){ $(b).disabled = !list.length; });
+  };
+  $('bPrint').onclick = function(){ window.print(); };
+  $('bDxf').onclick = function(){
+    var z = new JSZip();
+    list.forEach(function(sh){ z.file(PDRD_DXF.fileName(d, sh), PDRD_DXF.cp1251(PDRD_DXF.toDxf(sh))); });
+    z.generateAsync({ type:'blob', compression:'DEFLATE' }).then(function(b){ save(b, (d.passport.shifr || 'PD_RD').replace(/[^\w\-]+/g,'_') + '-LKS-DXF.zip', 'application/zip'); msg('ok','DXF: ' + list.length + ' файлов.'); });
+  };
+  $('bPdf').onclick = function(){
+    msg('warn','Формирование PDF (загрузка шрифта при первом запуске)…');
+    PDRD_PDF.render(list, { title: d.passport.object }).then(function(buf){
+      save(buf, (d.passport.shifr || 'PD_RD').replace(/[^\w\-]+/g,'_') + '-LKS.pdf', 'application/pdf');
+      msg('ok','PDF сформирован: ' + list.length + ' листов А3.');
+    }).catch(function(e){ msg('bad','PDF не сформирован: ' + e.message + '. Используйте «Печать» → «Сохранить как PDF».'); });
+  };
+})();
+</script>
+<script src="pdrd-nav.js?v=1.0.0"></script>
+</body>
+</html>

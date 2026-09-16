@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка проекта пользователя — PD_RD</title>
+<link rel="stylesheet" href="pdrd-ui.css?v=1.0.0">
+<style>
+.frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px 14px}
+.frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+.frm input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:15px}
+.chk{columns:2;column-gap:28px;font-size:14px}
+.chk label{display:flex;gap:8px;align-items:flex-start;break-inside:avoid;padding:3px 0}
+@media (max-width:700px){.chk{columns:1}}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{border-bottom:1px solid var(--line-s);padding:6px 7px;text-align:left;vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:12.5px}
+.tbl{overflow-x:auto}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
+  <nav aria-label="Разделы" id="nav"></nav>
+</div></header>
+<main class="wrap">
+  <section class="panel">
+    <h2>Проверка проектной документации пользователя</h2>
+    <p class="sub">Режим владельца ВЛ при согласовании проекта оператора (ТТ № 282р, раздел 5). Порядок: загрузите отчёт по п. 13 на странице «Исходные данные», внесите параметры проверяемого проекта (кабель, провода, высоты подвеса, муфты) на страницах «Расчёты» и «Решения», отметьте состав представленной документации и сформируйте лист замечаний. Можно также проверить файл проекта PD_RD, полученный от проектировщика.</p>
+    <div class="btns">
+      <label class="btn" for="fPdrd">Проверить файл проекта PD_RD</label>
+      <input type="file" id="fPdrd" accept=".pdrd,.json" hidden>
+      <span id="src" style="align-self:center;font-size:14px;color:var(--muted)">Источник: проект в этом браузере</span>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Сведения о проверке</h2>
+    <div class="frm">
+      <div><label for="docName">Проверяемая документация (наименование, шифр)</label><input id="docName"></div>
+      <div><label for="docFrom">Письмо пользователя (номер, дата)</label><input id="docFrom"></div>
+      <div><label for="reviewer">Проверил (Ф.И.О.)</label><input id="reviewer"></div>
+      <div><label for="revDate">Дата проверки</label><input id="revDate" type="date"></div>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Состав представленной документации</h2>
+    <p class="sub">Отметьте то, что представлено. Отсутствующее попадёт в замечания.</p>
+    <div class="chk" id="chk"></div>
+  </section>
+  <section class="panel">
+    <div class="btns"><button class="btn primary" id="bRun" type="button">Сформировать замечания</button><button class="btn" id="bDocx" type="button" disabled>Скачать лист замечаний (DOCX)</button></div>
+    <div id="msg"></div>
+    <div class="tbl"><table id="tRem"></table></div>
+  </section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="pdrd-core.js?v=1.0.0"></script>
+<script src="pdrd-norms.js?v=1.0.0"></script>
+<script src="pdrd-profiles.js?v=1.0.0"></script>
+<script src="pdrd-marks.js?v=1.0.0"></script>
+<script src="pdrd-refs-v25.js?v=1.0.0"></script>
+<script src="pdrd-calc.js?v=1.0.0"></script>
+<script src="pdrd-design.js?v=1.0.0"></script>
+<script src="pdrd-decide.js?v=1.0.0"></script>
+<script src="pdrd-spec.js?v=1.0.0"></script>
+<script src="pdrd-texts.js?v=1.0.0"></script>
+<script src="pdrd-docx.js?v=1.0.0"></script>
+<script src="pdrd-audit.js?v=1.0.0"></script>
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  var CHECK = PDRD_MARKS.PD.map(function(m){ return ['pd' + m.n, 'Раздел ' + m.n + ' «' + m.title + '» или обоснование его отсутствия', 'ПП РФ № 87, п. 32']; }).concat([
+    ['rd', 'Рабочая документация по ГОСТ Р 21.703-2020 / 21.101-2020 (общие данные, ведомости, основная надпись)', 'ГОСТ Р 21.101-2020'],
+    ['loads', 'Расчёт нагрузок на каждую опору с учётом существующих проводов и ранее размещённых кабелей', 'ТТ № 282р, п. 6; ПУЭ-7, пп. 2.4.89, 2.5.62–2.5.70'],
+    ['montage', 'Механический расчёт кабеля и монтажные таблицы', 'ПУЭ-7, п. 2.5.185'],
+    ['layout', 'Схема размещения кабеля по опорам с высотами подвеса и расстояниями', 'ТТ № 282р, пп. 3.2.2–3.2.6'],
+    ['nodes', 'Узлы крепления и арматура с паспортами / сертификатами (декларациями)', 'ТТ № 282р, п. 3.3'],
+    ['sleeves', 'Размещение муфт, шкафов и запасов (не на смежных промежуточных опорах)', 'ТТ № 282р, п. 4'],
+    ['tags', 'Маркировка кабеля бирками', 'ТТ № 282р, п. 3.1'],
+    ['cert', 'Декларация соответствия и паспорт на кабель', 'приказ Мининформсвязи № 47'],
+    ['metro', 'Метрологическое обеспечение (параметры, допуски, методики, СИ)', 'ПТ-029-4, п. 14'],
+    ['isp', 'Требования к исполнительной документации', 'РД 45.156-2000; ТТ № 282р'],
+    ['ot', 'Организация работ в охранной зоне ВЛ и охрана труда', 'ПП РФ № 160; приказы Минтруда № 903н, 782н'],
+    ['sro', 'Сведения о членстве проектной организации в СРО', 'ГрК РФ, ч. 4 ст. 48']
+  ]);
+  var d = PDRD.load(), fromFile = false, remarks = [];
+  var chk = $('chk');
+  CHECK.forEach(function(c){ var l = el('label'), i = el('input'); i.type = 'checkbox'; i.id = 'c_' + c[0]; l.appendChild(i); l.appendChild(document.createTextNode(c[1])); chk.appendChild(l); });
+  $('revDate').value = new Date().toISOString().slice(0,10);
+  $('fPdrd').onchange = function(e){
+    var f = e.target.files[0]; if (!f) return;
+    f.text().then(function(t){ d = PDRD.parseProject(t); fromFile = true; $('src').textContent = 'Источник: файл «' + f.name + '» (в браузер не сохраняется)'; })
+      .catch(function(er){ $('src').textContent = 'Ошибка: ' + er.message; });
+    e.target.value = '';
+  };
+  var SKIP = /Шифр|Марки комплектов|«Разработал»|«Проверил»|«Н\\. контроль»|Не указан ГИП|дата выпуска|заказчик проектной|техническое задание|Дата выпуска/;
+  $('bRun').onclick = function(){
+    var items = PDRD_AUDIT.run(d).filter(function(x){ return !(x.group === 'Комплектность СПДС' && SKIP.test(x.text)) && x.group !== 'Реестр норм'; });
+    CHECK.forEach(function(c){ if (!$('c_' + c[0]).checked) items.unshift({ group: 'Состав документации', lv: 'stop', text: 'Не представлено: ' + c[1], ref: c[2] }); });
+    remarks = PDRD_AUDIT.remarks(items);
+    var t = $('tRem'); t.innerHTML = '<thead><tr><th>№</th><th>Раздел проверки</th><th>Замечание</th><th>Основание</th><th>Характер</th></tr></thead>';
+    var tb = el('tbody'); remarks.forEach(function(r){ var tr = el('tr'); [r.n, r.group, r.text, r.ref, r.level].forEach(function(v){ tr.appendChild(el('td','',String(v))); }); tb.appendChild(tr); }); t.appendChild(tb);
+    var must = remarks.filter(function(r){ return r.level === 'обязательно к устранению'; }).length;
+    $('msg').innerHTML = ''; $('msg').appendChild(el('div','msg ' + (must ? 'bad' : 'ok'), 'Замечаний: ' + remarks.length + ', обязательных к устранению: ' + must + '.'));
+    $('bDocx').disabled = false;
+  };
+  $('bDocx').onclick = function(){
+    var tpl = { file:'tpl_zam.docx', code:'ЗАМ', num:null, pd:false, title:'Лист замечаний по проектной документации' };
+    var data = PDRD_DOCX.dataFromProject(d, tpl);
+    var must = remarks.filter(function(r){ return r.level === 'обязательно к устранению'; }).length;
+    data.fields['ОБОЗНАЧЕНИЕ'] = 'Замечания к ' + ($('docName').value || 'проектной документации');
+    data.fields['СТАДИЯ'] = 'П';
+    data.fields['ПРОВ_ФИО'] = $('reviewer').value; data.fields['РАЗРАБ_ФИО'] = $('reviewer').value;
+    data.fields['ДАТА_ВЫПУСКА_КР'] = ($('revDate').value || '').slice(5,7) + '.' + ($('revDate').value || '').slice(2,4);
+    data.fields['ГОД_ВЫПУСКА'] = ($('revDate').value || '').slice(0,4);
+    data.fields['ЗАКАЗЧИК_НАИМ'] = d.passport.operator; data.fields['ТОМ_НОМЕР'] = '—';
+    ['СРО_НАИМ','СРО_РЕГ_НОМЕР','СРО_ВЫПИСКА_ДАТА','НКОНТР_ФИО'].forEach(function(k){ if (!data.fields[k]) data.fields[k] = '—'; });
+    data.approved = true;
+    data.tables['ЗАМ_ИСТОЧНИК'] = { cols:[{t:'Сведения',w:70},{t:'Значение',w:105}], rows:[
+      ['Проверяемая документация', $('docName').value], ['Письмо пользователя', $('docFrom').value], ['Пользователь инфраструктуры', d.passport.operator + (d.passport.contractor ? ' (подрядчик ' + d.passport.contractor + ')' : '')],
+      ['Объект', d.passport.object], ['Отчёт по п. 13', d.basis.report13.number + ' от ' + (d.basis.report13.date || '').split('-').reverse().join('.')], ['Источник данных проверки', fromFile ? 'файл проекта PD_RD' : 'параметры, внесённые проверяющим']] };
+    data.tables['ЗАМЕЧАНИЯ'] = { cols:[{t:'№',w:8},{t:'Раздел',w:30},{t:'Замечание',w:82},{t:'Основание',w:30},{t:'Характер',w:25}], rows: remarks.map(function(r){ return [String(r.n), r.group, r.text, r.ref, r.level]; }) };
+    data.blocks['ЗАМ_ЗАКЛЮЧЕНИЕ'] = [must ? 'Проектная документация не может быть согласована до устранения ' + must + ' замечаний, обязательных к устранению. После устранения документация представляется повторно.' : 'Замечаний, препятствующих согласованию, нет. Рекомендуемые замечания учесть при разработке рабочей документации.'];
+    fetch(tpl.file).then(function(r){ return r.arrayBuffer(); }).then(function(b){ return PDRD_DOCX.fillDocx(b, data); }).then(function(res){
+      var a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = 'Zamechaniya_' + (d.basis.report13.number || 'proekt').replace(/[^\w\-]+/g,'_') + '.docx'; document.body.appendChild(a); a.click(); a.remove();
+    });
+  };
+})();
+</script>
+<script src="pdrd-nav.js?v=1.0.0"></script>
+</body>
+</html>
