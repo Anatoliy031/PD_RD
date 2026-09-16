@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Шаблоны томов — PD_RD</title>
+<link rel="stylesheet" href="pdrd-ui.css?v=0.3.0">
+<style>
+.vols{list-style:none;margin:0;padding:0}
+.vols li{padding:12px 0;border-bottom:1px solid var(--line-s)}
+.vols li:last-child{border-bottom:0}
+.vols .t{font-weight:600}
+.vols .meta{font-size:13px;color:var(--muted);margin:3px 0 8px}
+.vols .btns{margin-top:6px}
+.btn.sm{padding:6px 11px;font-size:13.5px}
+.rep{font-size:13.5px;margin-top:8px}
+.rep ul{margin:4px 0 0;padding-left:18px;columns:2;column-gap:24px}
+@media (max-width:640px){.rep ul{columns:1}}
+.switch{display:flex;gap:8px;align-items:center;margin:4px 0 12px;font-size:14px}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
+  <nav aria-label="Разделы">
+    <a href="index.html">Комплект</a>
+    <a class="on" href="shablony.html">Шаблоны</a>
+    <a href="normy.html">Нормы</a>
+    <a href="tests.html">Проверка ядра</a>
+  </nav>
+</div></header>
+<main class="wrap">
+  <section class="panel">
+    <h2>Шаблоны томов ПД и РД</h2>
+    <p class="sub">Десять разделов проектной документации по п. 32 Положения (ПП РФ № 87) и том рабочей документации.
+      Оформление — ГОСТ Р 21.101-2020: титульный лист, рамка, основная надпись формы 5 на первом листе и формы 6 на последующих.
+      Пока шифр не утверждён, на листах стоит отметка «ШИФР НЕ УТВЕРЖДЁН».</p>
+    <label class="switch"><input type="radio" name="src" value="demo" checked> Пример по пилоту (Новоджерелиевская)</label>
+    <label class="switch"><input type="radio" name="src" value="project"> Данные проекта из этого браузера</label>
+    <p class="small" style="color:var(--muted);font-size:13px;margin:0">Таблицы и тексты разделов появятся после расчётов; сейчас на их месте — красная пометка. Каждый пробел выводится в перечне под томом.</p>
+  </section>
+  <section class="panel">
+    <ul class="vols" id="vols"></ul>
+  </section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="pdrd-core.js?v=0.3.0"></script>
+<script src="pdrd-norms.js?v=0.3.0"></script>
+<script src="pdrd-docx.js?v=0.3.0"></script>
+<script>
+(function(){
+  var D = PDRD_DOCX, $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+  /* Пример по пилоту: сведения из отчёта ДРНУ-ППО/2026-23002603011239.
+     Подписи, шифр, СРО, ТЗ и ТУ не заполнены намеренно — это пробелы, блокирующие выпуск. */
+  function demoProject(){
+    var d = PDRD.blank(), p = d.passport;
+    p.object = 'Размещение ВОЛС на опорах ВЛ 0,4–10 кВ для сети B2C ПАО «Ростелеком», ст. Новоджерелиевская';
+    p.place = 'Краснодарский край, Брюховецкий район, ст. Новоджерелиевская';
+    p.operator = 'ПАО «Ростелеком»';
+    p.contractor = 'ООО «СвязьстройТелеКом»';
+    p.branch = 'филиал ПАО «Россети Юг» — «Кубаньэнерго»';
+    p.releaseDate = '2026-09-16';
+    d.profile.operator = 'rostelecom-b2c-gpon';
+    d.basis.report13 = { number:'ДРНУ-ППО/2026-23002603011239', date:'2026-09-08', sha256:'', source:'АРМ ППО 3.5.10' };
+    d.climate = { windRegion:'III', windPa:650, iceRegion:'II', iceMm:15, terrain:'A', seismic:7, source:'отчёт по п. 13, раздел климатических условий', confirmed:false };
+    d.cable = { mark:'ОС-М5-8-7,0', fibers:8, d_mm:10.5, mass_kg_km:90, t_allow_kn:2.7, approved:false };
+    d.lines = [{ id:'l04', name:'ВЛ 0,4 кВ', kv:0.4, wireType:'СИП' }, { id:'l10', name:'ВЛ 10 кВ', kv:10 }];
+    d.poles = new Array(898).fill(0).map(function(_, i){ return { id:'p' + i }; });
+    return d;
+  }
+  function source(){
+    return document.querySelector('input[name=src]:checked').value === 'demo' ? demoProject() : PDRD.load();
+  }
+
+  function save(blob, name){
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 8000);
+  }
+
+  D.TEMPLATES.forEach(function(t){
+    var li = el('li');
+    li.appendChild(el('div', 't', t.title));
+    var meta = el('div', 'meta', (t.pd ? 'ПД, обозначение ' : 'РД, марка ') + t.code + ' · проверка шаблона…');
+    li.appendChild(meta);
+    var btns = el('div', 'btns');
+    var bEmpty = el('a', 'btn sm', 'Скачать шаблон'); bEmpty.href = t.file; bEmpty.setAttribute('download', t.file);
+    var bFill = el('button', 'btn sm primary', 'Заполнить и скачать'); bFill.type = 'button';
+    btns.appendChild(bFill); btns.appendChild(bEmpty); li.appendChild(btns);
+    var rep = el('div', 'rep'); li.appendChild(rep);
+    $('vols').appendChild(li);
+
+    fetch(t.file).then(function(r){ if (!r.ok) throw new Error('файл не найден'); return r.arrayBuffer(); })
+      .then(D.inspectDocx).then(function(info){
+        var n = Object.keys(info.fields).length;
+        meta.textContent = (t.pd ? 'ПД, обозначение ' : 'РД, марка ') + t.code + ' · полей: ' + n +
+          (info.broken.length ? ' · разорванных полей: ' + info.broken.length : ' · поля целые');
+        if (info.broken.length) meta.style.color = 'var(--bad)';
+      }).catch(function(e){ meta.textContent = 'Шаблон не загрузился: ' + e.message; meta.style.color = 'var(--bad)'; });
+
+    bFill.onclick = function(){
+      bFill.disabled = true; rep.innerHTML = '';
+      var d = source();
+      fetch(t.file).then(function(r){ return r.arrayBuffer(); })
+        .then(function(buf){ return D.fillDocx(buf, D.dataFromProject(d, t)); })
+        .then(function(res){
+          var name = (d.passport.shifr || 'PD_RD') + '-' + t.code + (d.passport.shifrApproved ? '' : '_proekt') + '.docx';
+          save(res.blob, name.replace(/[^\wА-Яа-яЁё\-.]+/g, '_'));
+          var r = res.report;
+          var m = el('div', 'msg ' + (r.missing.length ? 'warn' : 'ok'),
+            'Файл сформирован. Подставлено значений: ' + r.filled + '. Не заполнено: ' + r.missing.length + (r.missing.length ? ' — выпуск будет заблокирован.' : '.'));
+          rep.appendChild(m);
+          if (r.errors.length) rep.appendChild(el('div', 'msg bad', r.errors.join('; ')));
+          if (r.missing.length){
+            var ul = el('ul');
+            r.missing.forEach(function(x){ ul.appendChild(el('li', '', x.key)); });
+            rep.appendChild(ul);
+          }
+        }).catch(function(e){ rep.appendChild(el('div', 'msg bad', 'Ошибка: ' + e.message)); })
+        .then(function(){ bFill.disabled = false; });
+    };
+  });
+})();
+</script>
+</body>
+</html>

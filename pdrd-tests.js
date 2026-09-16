@@ -111,6 +111,62 @@ if (PR) t('Профиль пилота — Ростелеком', function(){
   return p[0].title;
 });
 
+/* ---------------------------------------------------------- заполнение шаблонов */
+var DX = window.PDRD_DOCX;
+if (DX) {
+  var WNS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"';
+  function P_(txt, st){ return '<w:p><w:pPr><w:pStyle w:val="' + (st||'Body') + '"/></w:pPr><w:r><w:t xml:space="preserve">' + txt + '</w:t></w:r></w:p>'; }
+  function docX(inner){ return '<w:document ' + WNS + '><w:body>' + inner + '<w:sectPr/></w:body></w:document>'; }
+  function fill(inner, data){ var rep = { missing:[], errors:[], filled:0 }; var x = DX.fillPart(docX(inner), data, rep, 'document.xml'); return { x:x, r:rep }; }
+  t('Шаблон: поле подставляется, пустое → «—» и пробел', function(){
+    var o = fill(P_('Объект {{ОБЪЕКТ_НАИМ}}, ГИП {{ГИП_ФИО}}'), { fields:{ 'ГИП_ФИО':'Е.В. Куличкин', 'ОБЪЕКТ_НАИМ':'' } });
+    eq(o.x.indexOf('Объект —, ГИП Е.В. Куличкин') >= 0, true, 'текст'); eq(o.r.missing.length, 1, 'пробелов'); eq(o.r.missing[0].key, 'ОБЪЕКТ_НАИМ');
+    return 'подставлено 1, пробел 1';
+  });
+  t('Шаблон: условие ЕСЛИ убирает блок', function(){
+    var inner = P_('{{ЕСЛИ:ПОДРЯДЧИК}}', 'Marker') + P_('Подрядчик {{ПОДРЯДЧИК_НАИМ}}') + P_('{{КОНЕЦ}}', 'Marker') + P_('Хвост');
+    var no = fill(inner, { cond:{ 'ПОДРЯДЧИК':false }, fields:{} });
+    eq(no.x.indexOf('Подрядчик') < 0, true, 'блок удалён'); eq(no.x.indexOf('Хвост') >= 0, true, 'текст после блока'); eq(no.r.missing.length, 0, 'поля скрытого блока не считаются');
+    var yes = fill(inner, { cond:{ 'ПОДРЯДЧИК':true }, fields:{ 'ПОДРЯДЧИК_НАИМ':'ООО «СвязьстройТелеКом»' } });
+    eq(yes.x.indexOf('Подрядчик ООО «СвязьстройТелеКом»') >= 0, true, 'блок оставлен'); eq(yes.x.indexOf('ЕСЛИ') < 0, true, 'маркеры убраны');
+    return 'оба варианта';
+  });
+  t('Шаблон: подсказки проектировщику удаляются', function(){
+    var o = fill(P_('Подсказка для проектировщика', 'Hint') + P_('Текст'), { fields:{} });
+    eq(o.x.indexOf('Подсказка') < 0, true); return 'удалена';
+  });
+  t('Шаблон: таблица вставляется, отсутствующая — пробел', function(){
+    var o = fill(P_('{{ТАБЛИЦА:КАБЕЛЬ}}', 'Marker') + P_('{{ТАБЛИЦА:ОПОРЫ}}', 'Marker'),
+      { tables:{ 'КАБЕЛЬ':{ cols:[{ t:'Параметр', w:1 }, { t:'Значение', w:1 }], rows:[['Марка', 'ОС-М5-8-7,0'], ['Диаметр', '']] } } });
+    eq(o.x.indexOf('<w:tbl>') >= 0 || o.x.indexOf('<w:tbl ') >= 0, true, 'таблица');
+    eq(o.x.indexOf('ОС-М5-8-7,0') >= 0, true, 'данные');
+    eq(o.r.missing.length, 1, 'пробелов'); eq(o.r.missing[0].key, 'ТАБЛИЦА:ОПОРЫ');
+    return 'КАБЕЛЬ вставлена, ОПОРЫ — пробел';
+  });
+  t('Шаблон: отметка «ШИФР НЕ УТВЕРЖДЁН» снимается только при утверждённом шифре', function(){
+    var shape = '<w:p><w:r><w:drawing><wp:anchor><wp:docPr id="1" name="PDRD_WATERMARK"/></wp:anchor></w:drawing></w:r></w:p>';
+    eq(fill(shape, { approved:false }).x.indexOf('PDRD_WATERMARK') >= 0, true, 'не утверждён — отметка есть');
+    eq(fill(shape, { approved:true }).x.indexOf('PDRD_WATERMARK') < 0, true, 'утверждён — отметки нет');
+    return 'работает';
+  });
+  t('Шаблон: разорванное поле обнаруживается', function(){
+    eq(DX.brokenFields('<w:t>{{ОБЪЕКТ_</w:t><w:t>НАИМ}}</w:t>').length, 2); eq(DX.brokenFields('<w:t>{{ОБЪЕКТ_НАИМ}}</w:t>').length, 0);
+    return 'проверка целостности';
+  });
+  t('Данные проекта: неутверждённый шифр в обозначении', function(){
+    var d = P.blank(); var r = DX.dataFromProject(d, DX.TEMPLATES[2]);
+    eq(r.approved, false); eq(r.fields['ОБОЗНАЧЕНИЕ'], 'ШИФР НЕ УТВЕРЖДЁН-ТКР'); eq(r.fields['СТАДИЯ'], 'П'); eq(r.fields['ГИП_ФИО'], 'Е.В. Куличкин');
+    return r.fields['ОБОЗНАЧЕНИЕ'];
+  });
+  t('Данные проекта: нормы расстояний для СИП 0,4 и 10 кВ', function(){
+    var d = P.blank(); d.lines = [{ kv:0.4, wireType:'СИП' }, { kv:10 }];
+    var tb = DX.dataFromProject(d, DX.TEMPLATES[2]).tables['РАССТОЯНИЯ_НОРМЫ'];
+    eq(tb.rows[0][1], 'не менее 0,4 м', '0,4 кВ СИП'); eq(tb.rows[1][1], 'не менее 0,6 м', '10 кВ');
+    return tb.rows.length + ' строк';
+  });
+  t('Шаблонов — 10 разделов ПД и том РД', function(){ eq(DX.TEMPLATES.length, 11); eq(DX.TEMPLATES.filter(function(x){ return x.pd; }).length, 10); return '11'; });
+}
+
 var ok = res.filter(function(r){ return r.ok; }).length;
 var rows = document.getElementById('rows');
 res.forEach(function(r){

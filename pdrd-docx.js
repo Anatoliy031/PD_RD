@@ -1,0 +1,308 @@
+/* PD_RD — заполнение шаблонов томов (tpl_*.docx).
+   Поля шаблона:
+     {{ПОЛЕ}}                 — значение из словаря; пустое → «—» и запись в перечень пробелов;
+     {{ТАБЛИЦА:ИМЯ}}          — абзац-маркер заменяется таблицей;
+     {{БЛОК:ИМЯ}}             — абзац-маркер заменяется абзацами текста;
+     {{ЕСЛИ:УСЛОВИЕ}}…{{КОНЕЦ}} — содержимое остаётся, только если условие истинно.
+   Абзацы-подсказки (стиль «PD Подсказка») удаляются.
+   Отметка «ШИФР НЕ УТВЕРЖДЁН» удаляется только при утверждённом шифре.
+   Требует JSZip (cdnjs, 3.10.1). */
+(function (global) {
+'use strict';
+
+var W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+var DASH = '—';
+var MM = 56.6929;
+
+var TEMPLATES = [
+  { file:'tpl_pz.docx',  code:'ПЗ',  num:1,  pd:true,  title:'Раздел 1. Пояснительная записка' },
+  { file:'tpl_ppo.docx', code:'ППО', num:2,  pd:true,  title:'Раздел 2. Проект полосы отвода' },
+  { file:'tpl_tkr.docx', code:'ТКР', num:3,  pd:true,  title:'Раздел 3. Технологические и конструктивные решения линейного объекта. Искусственные сооружения' },
+  { file:'tpl_ilo.docx', code:'ИЛО', num:4,  pd:true,  title:'Раздел 4. Здания, строения и сооружения, входящие в инфраструктуру линейного объекта' },
+  { file:'tpl_pos.docx', code:'ПОС', num:5,  pd:true,  title:'Раздел 5. Проект организации строительства' },
+  { file:'tpl_oos.docx', code:'ООС', num:6,  pd:true,  title:'Раздел 6. Мероприятия по охране окружающей среды' },
+  { file:'tpl_pb.docx',  code:'ПБ',  num:7,  pd:true,  title:'Раздел 7. Мероприятия по обеспечению пожарной безопасности' },
+  { file:'tpl_tbe.docx', code:'ТБЭ', num:8,  pd:true,  title:'Раздел 8. Требования к обеспечению безопасной эксплуатации линейного объекта' },
+  { file:'tpl_sm.docx',  code:'СМ',  num:9,  pd:true,  title:'Раздел 9. Смета на строительство' },
+  { file:'tpl_id.docx',  code:'ИД',  num:10, pd:true,  title:'Раздел 10. Иная документация' },
+  { file:'tpl_rd.docx',  code:'ЛКС', num:null, pd:false, title:'Рабочая документация. Общие данные и ведомости' }
+];
+
+/* ---------------------------------------------------------------- поля */
+var RE_FIELD = /\{\{([^{}]+)\}\}/g;
+
+function listFields(xml) {
+  var out = {}, m;
+  RE_FIELD.lastIndex = 0;
+  while ((m = RE_FIELD.exec(xml))) out[m[1]] = (out[m[1]] || 0) + 1;
+  return out;
+}
+
+/* Поля, разорванные между run'ами: «{{» без «}}» в одном w:t */
+function brokenFields(xml) {
+  var bad = [], re = /<w:t[^>]*>([^<]*)<\/w:t>/g, m;
+  while ((m = re.exec(xml))) {
+    var t = m[1];
+    var open = (t.match(/\{\{/g) || []).length, close = (t.match(/\}\}/g) || []).length;
+    if (open !== close) bad.push(t);
+  }
+  return bad;
+}
+
+/* ---------------------------------------------------------------- DOM-помощники */
+function el(doc, name, attrs, kids) {
+  var e = doc.createElementNS(W, 'w:' + name);
+  if (attrs) Object.keys(attrs).forEach(function (k) { e.setAttributeNS(W, 'w:' + k, String(attrs[k])); });
+  (kids || []).forEach(function (k) { if (k) e.appendChild(k); });
+  return e;
+}
+function textRun(doc, text, opt) {
+  opt = opt || {};
+  var rpr = [];
+  if (opt.b) rpr.push(el(doc, 'b'));
+  if (opt.color) rpr.push(el(doc, 'color', { val: opt.color }));
+  if (opt.sz) { rpr.push(el(doc, 'sz', { val: opt.sz })); rpr.push(el(doc, 'szCs', { val: opt.sz })); }
+  var t = el(doc, 't'); t.setAttribute('xml:space', 'preserve'); t.textContent = text;
+  return el(doc, 'r', null, [rpr.length ? el(doc, 'rPr', null, rpr) : null, t]);
+}
+function paraNode(doc, text, style, opt) {
+  opt = opt || {};
+  var ppr = [el(doc, 'pStyle', { val: style || 'Body' })];
+  if (opt.keep) ppr.push(el(doc, 'keepNext'));
+  if (opt.jc) ppr.push(el(doc, 'jc', { val: opt.jc }));
+  return el(doc, 'p', null, [el(doc, 'pPr', null, ppr), textRun(doc, text, opt)]);
+}
+function styleOf(p) {
+  var ps = p.getElementsByTagNameNS(W, 'pStyle')[0];
+  return ps ? ps.getAttributeNS(W, 'val') || ps.getAttribute('w:val') : '';
+}
+function textOf(node) {
+  var ts = node.getElementsByTagNameNS(W, 't'), s = '';
+  for (var i = 0; i < ts.length; i++) s += ts[i].textContent;
+  return s;
+}
+
+/* Таблица: spec = { caption, cols:[{t, w}] (w — мм), rows:[[…]] } */
+function tableNodes(doc, spec) {
+  var total = 175, cols = spec.cols || [];
+  var sum = cols.reduce(function (a, c) { return a + (c.w || 0); }, 0) || cols.length;
+  var widths = cols.map(function (c) { return Math.round(((c.w || 1) / sum) * total * MM); });
+  var border = function (n) { return el(doc, n, { val: 'single', sz: 4, space: 0, color: '000000' }); };
+  var tblPr = el(doc, 'tblPr', null, [
+    el(doc, 'tblW', { w: widths.reduce(function (a, b) { return a + b; }, 0), type: 'dxa' }),
+    el(doc, 'tblBorders', null, ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(border)),
+    el(doc, 'tblLayout', { type: 'fixed' }),
+    el(doc, 'tblCellMar', null, [el(doc, 'left', { w: 57, type: 'dxa' }), el(doc, 'right', { w: 57, type: 'dxa' })])
+  ]);
+  var grid = el(doc, 'tblGrid', null, widths.map(function (w) { return el(doc, 'gridCol', { w: w }); }));
+  function rowNode(vals, head) {
+    var trPr = el(doc, 'trPr', null, [el(doc, 'cantSplit'), head ? el(doc, 'tblHeader') : null]);
+    var cells = vals.map(function (v, i) {
+      var p = el(doc, 'p', null, [
+        el(doc, 'pPr', null, [el(doc, 'spacing', { before: 0, after: 0 }), el(doc, 'jc', { val: head ? 'center' : (cols[i] && cols[i].al) || 'left' })]),
+        textRun(doc, (v === null || v === undefined || v === '') ? DASH : String(v), { sz: 20, b: head })
+      ]);
+      return el(doc, 'tc', null, [el(doc, 'tcPr', null, [el(doc, 'tcW', { w: widths[i], type: 'dxa' }),
+        head ? el(doc, 'shd', { val: 'clear', color: 'auto', fill: 'EEF2F6' }) : null,
+        el(doc, 'vAlign', { val: head ? 'center' : 'top' })]), p]);
+    });
+    return el(doc, 'tr', null, [trPr].concat(cells));
+  }
+  var tbl = el(doc, 'tbl', null, [tblPr, grid, rowNode(cols.map(function (c) { return c.t; }), true)]
+    .concat((spec.rows || []).map(function (r) { return rowNode(r, false); })));
+  var out = [];
+  if (spec.caption) out.push(paraNode(doc, spec.caption, 'Body', { keep: true }));
+  out.push(tbl);
+  out.push(el(doc, 'p', null, [el(doc, 'pPr', null, [el(doc, 'spacing', { before: 0, after: 60 })])]));
+  return out;
+}
+
+/* ---------------------------------------------------------------- заполнение части */
+function fillPart(xml, data, report, partName) {
+  var doc = new DOMParser().parseFromString(xml, 'application/xml');
+  var body = doc.getElementsByTagNameNS(W, 'body')[0] || doc.documentElement;
+
+  /* 1. Условия и маркеры — только прямые абзацы тела */
+  var kids = Array.prototype.slice.call(body.childNodes);
+  var stack = [];
+  kids.forEach(function (n) {
+    if (n.nodeType !== 1) return;
+    var isP = n.localName === 'p';
+    var st = isP ? styleOf(n) : '';
+    var txt = isP ? textOf(n).trim() : '';
+    var m = st === 'Marker' ? /^\{\{(ЕСЛИ|КОНЕЦ|ТАБЛИЦА|БЛОК)(?::([^}]+))?\}\}$/.exec(txt) : null;
+    var hidden = stack.some(function (v) { return !v; });
+    if (m && m[1] === 'ЕСЛИ') {
+      var v = !!(data.cond && data.cond[m[2]]);
+      if (!(data.cond && m[2] in data.cond)) report.missing.push({ part: partName, key: 'ЕСЛИ:' + m[2] });
+      stack.push(v); body.removeChild(n); return;
+    }
+    if (m && m[1] === 'КОНЕЦ') { stack.pop(); body.removeChild(n); return; }
+    if (hidden) { if (n.localName !== 'sectPr' && !n.getElementsByTagNameNS(W, 'sectPr').length) body.removeChild(n); return; }
+    if (isP && st === 'Hint') { body.removeChild(n); return; }
+    if (m && m[1] === 'ТАБЛИЦА') {
+      var spec = data.tables && data.tables[m[2]];
+      var nodes = spec ? tableNodes(doc, spec)
+        : [paraNode(doc, DASH + ' (таблица «' + m[2] + '» не сформирована)', 'Body', { color: 'A32B2B' })];
+      if (!spec) report.missing.push({ part: partName, key: 'ТАБЛИЦА:' + m[2] });
+      nodes.forEach(function (x) { body.insertBefore(x, n); });
+      body.removeChild(n); return;
+    }
+    if (m && m[1] === 'БЛОК') {
+      var blk = data.blocks && data.blocks[m[2]];
+      if (!blk || !blk.length) {
+        report.missing.push({ part: partName, key: 'БЛОК:' + m[2] });
+        blk = [DASH + ' (текст «' + m[2] + '» не сформирован)'];
+        body.insertBefore(paraNode(doc, blk[0], 'Body', { color: 'A32B2B' }), n);
+      } else {
+        blk.forEach(function (t) { body.insertBefore(paraNode(doc, t, 'Body'), n); });
+      }
+      body.removeChild(n); return;
+    }
+  });
+  if (stack.length) report.errors.push(partName + ': не закрыт блок {{ЕСЛИ}}');
+
+  /* 2. Отметка неутверждённого шифра */
+  if (data.approved) {
+    var props = doc.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing', 'docPr');
+    Array.prototype.slice.call(props).forEach(function (dp) {
+      if (dp.getAttribute('name') !== 'PDRD_WATERMARK') return;
+      var r = dp; while (r && r.localName !== 'r') r = r.parentNode;
+      if (r && r.parentNode) r.parentNode.removeChild(r);
+    });
+  }
+
+  /* 3. Простые поля */
+  var ts = doc.getElementsByTagNameNS(W, 't');
+  for (var i = 0; i < ts.length; i++) {
+    var t = ts[i], s = t.textContent;
+    if (s.indexOf('{{') < 0) continue;
+    t.textContent = s.replace(RE_FIELD, function (all, key) {
+      var v = data.fields ? data.fields[key] : undefined;
+      if (v === undefined || v === null || String(v).trim() === '') {
+        report.missing.push({ part: partName, key: key });
+        return DASH;
+      }
+      report.filled++;
+      return String(v);
+    });
+  }
+  return new XMLSerializer().serializeToString(doc);
+}
+
+/* ---------------------------------------------------------------- том целиком */
+function fillDocx(buffer, data) {
+  var report = { missing: [], errors: [], filled: 0 };
+  return JSZip.loadAsync(buffer).then(function (zip) {
+    var parts = Object.keys(zip.files).filter(function (n) {
+      return /^word\/(document|header\d+|footer\d+)\.xml$/.test(n);
+    });
+    return Promise.all(parts.map(function (n) {
+      return zip.file(n).async('string').then(function (xml) {
+        zip.file(n, fillPart(xml, data, report, n.replace('word/', '')));
+      });
+    })).then(function () {
+      var seen = {};
+      report.missing = report.missing.filter(function (x) { var k = x.key; if (seen[k]) return false; seen[k] = 1; return true; });
+      return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+        .then(function (blob) { return { blob: blob, report: report }; });
+    });
+  });
+}
+
+/* Перечень полей шаблона и проверка целостности */
+function inspectDocx(buffer) {
+  return JSZip.loadAsync(buffer).then(function (zip) {
+    var parts = Object.keys(zip.files).filter(function (n) { return /^word\/(document|header\d+|footer\d+)\.xml$/.test(n); });
+    return Promise.all(parts.map(function (n) { return zip.file(n).async('string'); })).then(function (xs) {
+      var f = {}, broken = [];
+      xs.forEach(function (x) {
+        var l = listFields(x); Object.keys(l).forEach(function (k) { f[k] = (f[k] || 0) + l[k]; });
+        broken = broken.concat(brokenFields(x));
+      });
+      return { fields: f, broken: broken, watermark: xs.some(function (x) { return x.indexOf('PDRD_WATERMARK') >= 0; }) };
+    });
+  });
+}
+
+/* ---------------------------------------------------------------- данные из проекта */
+function kr(iso) { if (!iso) return ''; var p = iso.slice(0, 10).split('-'); return p[1] + '.' + p[0].slice(2); }
+function ru(iso) { if (!iso) return ''; return iso.slice(0, 10).split('-').reverse().join('.'); }
+
+function dataFromProject(d, tpl) {
+  var p = d.passport, s = p.signs, b = d.basis, l = d.legal, c = d.climate, cb = d.cable;
+  var approved = !!(p.shifr && p.shifrApproved && p.marksApproved);
+  var code = (p.shifr || 'ШИФР НЕ УТВЕРЖДЁН') + '-' + tpl.code;
+  var profile = d.profile && d.profile.operator || '';
+  var kv = {};
+  d.lines.forEach(function (x) { if (x.kv !== undefined && x.kv !== '') kv[x.kv] = 1; });
+  var kvs = Object.keys(kv).map(Number).sort(function (a, b) { return a - b; });
+  var fields = {
+    'ОБОЗНАЧЕНИЕ': code,
+    'ТОМ_НОМЕР': tpl.num ? String(tpl.num) : '',
+    'ТОМ_НАИМ': tpl.title,
+    'СТАДИЯ': tpl.pd ? 'П' : 'Р',
+    'ОБЪЕКТ_НАИМ': p.object, 'ОБЪЕКТ_МЕСТО': p.place,
+    'ВЛАДЕЛЕЦ_НАИМ': p.owner, 'ВЛАДЕЛЕЦ_ФИЛИАЛ': p.branch,
+    'ОРГАНИЗАЦИЯ': p.branch,
+    'ОПЕРАТОР_НАИМ': p.operator, 'ПОДРЯДЧИК_НАИМ': p.contractor,
+    'ЗАКАЗЧИК_НАИМ': p.designCustomer,
+    'ГИП_ФИО': s.gip, 'РАЗРАБ_ФИО': s.razrab, 'ПРОВ_ФИО': s.prov, 'НКОНТР_ФИО': s.nkontr,
+    'ДАТА_ВЫПУСКА_КР': kr(p.releaseDate), 'ГОД_ВЫПУСКА': p.releaseDate ? p.releaseDate.slice(0, 4) : '',
+    'СРО_НАИМ': l.sro.name, 'СРО_РЕГ_НОМЕР': l.sro.regNumber, 'СРО_ВЫПИСКА_ДАТА': ru(l.sro.extractDate),
+    'ТЗ_НОМЕР': b.tz.number, 'ТЗ_ДАТА': ru(b.tz.date), 'ТЗ_НАИМ': b.tz.title || '',
+    'ТУ_НОМЕР': b.tu.number, 'ТУ_ДАТА': ru(b.tu.date),
+    'ОТЧЁТ_П13_НОМЕР': b.report13.number, 'ОТЧЁТ_П13_ДАТА': ru(b.report13.date), 'ОТЧЁТ_П13_ХЭШ': b.report13.sha256,
+    'ДОГОВОР_ПИР_НОМЕР': b.contract ? b.contract.number : '', 'ДОГОВОР_ПИР_ДАТА': b.contract ? ru(b.contract.date) : '',
+    'ПРОГРАММА_РАСЧЁТА': 'PD_RD ' + (global.PDRD ? global.PDRD.VERSION : ''),
+    'КЛАССЫ_КВ': kvs.map(function (x) { return String(x).replace('.', ','); }).join(' и '),
+    'ОПОР_ВСЕГО': d.poles.length ? String(d.poles.length) : '',
+    'РАЙОН_ВЕТЕР': c.windRegion, 'ДАВЛЕНИЕ_ВЕТРА_ПА': c.windPa, 'РАЙОН_ГОЛОЛЁД': c.iceRegion,
+    'СТЕНКА_ГОЛОЛЁДА_ММ': c.iceMm, 'ТИП_МЕСТНОСТИ': c.terrain, 'СЕЙСМИЧНОСТЬ': c.seismic, 'КЛИМАТ_ИСТОЧНИК': c.source,
+    'КАБЕЛЬ_МАРКА': cb.mark, 'КАБЕЛЬ_ОВ': cb.fibers,
+    'ОБОЗНАЧЕНИЕ_ПД': p.shifr || 'ШИФР НЕ УТВЕРЖДЁН'
+  };
+  var tables = {};
+  var N = global.PDRD_NORMS;
+  if (N) {
+    /* Нормируемые расстояния ТТ № 282р — по классам напряжения проекта */
+    var rows = [];
+    kvs.forEach(function (k) {
+      var wireType = k <= 1 ? (d.lines.filter(function (x) { return +x.kv === k; }).map(function (x) { return x.wireType || ''; }).join(' ') || '') : '';
+      var r = N.wireDistance(k, wireType);
+      rows.push(['ОКСН — провод ВЛ ' + String(k).replace('.', ',') + ' кВ' + (k <= 1 ? (r.gap ? ' (тип провода не задан)' : ' с СИП') : '') + ', на опоре и в пролёте',
+                 r.value === null ? 'не установлено' : 'не менее ' + String(r.value).replace('.', ',') + ' м', r.ref]);
+    });
+    ['tt.dist.element', 'tt.dist.ground', 'tt.dist.fixH', 'tt.dist.fixV', 'tt.tag.dist'].forEach(function (id) {
+      var v = N.val(id);
+      rows.push([v.what, (id === 'tt.tag.dist' ? 'не более ' : 'не менее ') + String(v.value).replace('.', ',') + ' ' + v.unit, v.ref]);
+    });
+    tables['РАССТОЯНИЯ_НОРМЫ'] = { caption: 'Таблица — Нормируемые расстояния',
+      cols: [{ t: 'Наименование', w: 95 }, { t: 'Значение', w: 35 }, { t: 'Документ, пункт', w: 45 }], rows: rows };
+  }
+  if (cb.mark) {
+    tables['КАБЕЛЬ'] = { caption: 'Таблица — Характеристики кабеля',
+      cols: [{ t: 'Параметр', w: 110 }, { t: 'Значение', w: 65 }],
+      rows: [['Марка', cb.mark], ['Число оптических волокон', cb.fibers], ['Наружный диаметр, мм', cb.d_mm],
+             ['Масса, кг/км', cb.mass_kg_km], ['Допустимая растягивающая нагрузка, кН', cb.t_allow_kn],
+             ['Статус данных', cb.approved ? 'из утверждённого каталога' : 'по отчёту п. 13 — подтвердить паспортом изготовителя']] };
+  }
+  return {
+    approved: approved,
+    fields: fields,
+    cond: {
+      'ПОДРЯДЧИК': !!p.contractor,
+      'КЛАСС_35_110': kvs.some(function (x) { return x >= 35; }),
+      'ПРОФИЛЬ_GPON': profile === 'rostelecom-b2c-gpon',
+      'ПРОФИЛЬ_ВЫМПЕЛКОМ': profile === 'beeline'
+    },
+    tables: tables, blocks: {}
+  };
+}
+
+global.PDRD_DOCX = {
+  TEMPLATES: TEMPLATES, fillDocx: fillDocx, inspectDocx: inspectDocx,
+  listFields: listFields, brokenFields: brokenFields, fillPart: fillPart,
+  dataFromProject: dataFromProject
+};
+})(typeof window !== 'undefined' ? window : globalThis);
