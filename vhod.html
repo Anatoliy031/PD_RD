@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Исходные данные и входной контроль — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.0.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.0.1">
 <style>
 .drop{border:2px dashed var(--line);border-radius:8px;padding:18px;text-align:center;background:var(--sheet)}
 .drop.over{border-color:var(--blue);background:var(--blue-l)}
@@ -66,18 +66,18 @@
   </section>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="pdrd-core.js?v=1.0.0"></script>
-<script src="pdrd-norms.js?v=1.0.0"></script>
-<script src="pdrd-profiles.js?v=1.0.0"></script>
-<script src="pdrd-marks.js?v=1.0.0"></script>
-<script src="pdrd-refs-v25.js?v=1.0.0"></script>
-<script src="pdrd-import.js?v=1.0.0"></script>
-<script src="pdrd-calc.js?v=1.0.0"></script>
-<script src="pdrd-design.js?v=1.0.0"></script>
-<script src="pdrd-decide.js?v=1.0.0"></script>
-<script src="pdrd-spec.js?v=1.0.0"></script>
-<script src="pdrd-texts.js?v=1.0.0"></script>
-<script src="pdrd-docx.js?v=1.0.0"></script>
+<script src="pdrd-core.js?v=1.0.1"></script>
+<script src="pdrd-norms.js?v=1.0.1"></script>
+<script src="pdrd-profiles.js?v=1.0.1"></script>
+<script src="pdrd-marks.js?v=1.0.1"></script>
+<script src="pdrd-refs-v25.js?v=1.0.1"></script>
+<script src="pdrd-import.js?v=1.0.1"></script>
+<script src="pdrd-calc.js?v=1.0.1"></script>
+<script src="pdrd-design.js?v=1.0.1"></script>
+<script src="pdrd-decide.js?v=1.0.1"></script>
+<script src="pdrd-spec.js?v=1.0.1"></script>
+<script src="pdrd-texts.js?v=1.0.1"></script>
+<script src="pdrd-docx.js?v=1.0.1"></script>
 <script>
 (function(){
   var I = PDRD_IMPORT, $ = function(id){ return document.getElementById(id); };
@@ -177,9 +177,7 @@
     fetch(PDRD_DOCX.INTAKE_TPL.file).then(function(r){ return r.arrayBuffer(); })
       .then(function(buf){ return PDRD_DOCX.fillDocx(buf, PDRD_DOCX.dataForIntake(d)); })
       .then(function(res){
-        var a = document.createElement('a'); a.href = URL.createObjectURL(res.blob);
-        a.download = 'Vhodnoj_kontrol_' + String(d.basis.report13.number || 'otchet').replace(/[^\w\-]+/g, '_') + '.docx';
-        document.body.appendChild(a); a.click(); a.remove();
+        PDRD.download(res.blob, 'Vhodnoj_kontrol_' + (d.basis.report13.number || 'otchet') + '.docx');
         msg($('accMsg'), 'ok', 'Лист входного контроля сформирован. Не заполнено полей: ' + res.report.missing.length + ' (шифр и подписи проекта).');
       }).catch(function(e){ msg($('accMsg'), 'bad', 'Ошибка формирования листа: ' + e.message); });
   };
@@ -200,6 +198,6 @@
   }
 })();
 </script>
-<script src="pdrd-nav.js?v=1.0.0"></script>
+<script src="pdrd-nav.js?v=1.0.1"></script>
 </body>
 </html>

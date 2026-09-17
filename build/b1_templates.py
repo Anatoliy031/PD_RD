@@ -16,7 +16,7 @@ import os, sys, zipfile, datetime
 from xml.sax.saxutils import escape
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 
 MM = 56.6929  # twips в мм
 def tw(mm): return int(round(mm * MM))
@@ -156,37 +156,35 @@ def form6():
     return table(widths, rows)
 
 # ------------------------------------------------------------------ рамка и отметка
-_shape_id = [100]
-def anchor(name, x_mm, y_mm, w_mm, h_mm, inner, behind=True):
-    _shape_id[0] += 1
-    sid = _shape_id[0]
-    return (f'<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="{sid}" '
-            f'behindDoc="{1 if behind else 0}" locked="1" layoutInCell="1" allowOverlap="1">'
-            f'<wp:simplePos x="0" y="0"/>'
-            f'<wp:positionH relativeFrom="page"><wp:posOffset>{emu(x_mm)}</wp:posOffset></wp:positionH>'
-            f'<wp:positionV relativeFrom="page"><wp:posOffset>{emu(y_mm)}</wp:posOffset></wp:positionV>'
-            f'<wp:extent cx="{emu(w_mm)}" cy="{emu(h_mm)}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>'
-            f'<wp:wrapNone/><wp:docPr id="{sid}" name="{name}"/><wp:cNvGraphicFramePr/>'
-            f'<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
-            f'<a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">'
-            f'{inner}</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>')
+def pt(mm): return f'{mm * 72 / 25.4:.2f}pt'
 
 def frame_shape():
-    inner = (f'<wps:wsp><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{emu(185)}" cy="{emu(287)}"/></a:xfrm>'
-             f'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/>'
-             f'<a:ln w="{emu(0.5)}"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></wps:spPr>'
-             f'<wps:bodyPr/></wps:wsp>')
-    return anchor('PDRD_FRAME', 20, 5, 185, 287, inner)
+    """Рамка листа — VML (понимают все версии Word, «Р7-Офис», LibreOffice, Pages, просмотр iPad)."""
+    return ('<w:r><w:pict>'
+            f'<v:rect id="PDRD_FRAME" o:spid="_x0000_s2049" o:allowincell="f" filled="f" strokecolor="black" strokeweight="1.5pt" '
+            f'style="position:absolute;margin-left:{pt(20)};margin-top:{pt(5)};width:{pt(185)};height:{pt(287)};z-index:-251658240;'
+            'mso-position-horizontal-relative:page;mso-position-vertical-relative:page">'
+            '<w10:wrap anchorx="page" anchory="page"/></v:rect>'
+            '</w:pict></w:r>')
+
+SHAPETYPE_136 = ('<v:shapetype id="_x0000_t136" coordsize="21600,21600" o:spt="136" adj="10800" path="m@7,l@8,m@5,21600l@6,21600e">'
+    '<v:formulas><v:f eqn="sum #0 0 10800"/><v:f eqn="prod #0 2 1"/><v:f eqn="sum 21600 0 @1"/><v:f eqn="sum 0 0 @2"/>'
+    '<v:f eqn="sum 21600 0 @3"/><v:f eqn="if @0 @3 0"/><v:f eqn="if @0 21600 @1"/><v:f eqn="if @0 0 @2"/>'
+    '<v:f eqn="if @0 @4 21600"/><v:f eqn="mid @5 @6"/><v:f eqn="mid @8 @5"/><v:f eqn="mid @7 @8"/>'
+    '<v:f eqn="mid @6 @7"/><v:f eqn="sum @6 0 @5"/></v:formulas>'
+    '<v:path textpathok="t" o:connecttype="custom" o:connectlocs="@9,0;@10,10800;@11,21600;@12,10800" o:connectangles="270,180,90,0"/>'
+    '<v:textpath on="t" fitshape="t"/><v:handles><v:h position="#0,bottomRight" xrange="6629,14971"/></v:handles>'
+    '<o:lock v:ext="edit" text="t" shapetype="t"/></v:shapetype>')
 
 def watermark_shape():
-    inner = (f'<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm rot="-3300000"><a:off x="0" y="0"/>'
-             f'<a:ext cx="{emu(170)}" cy="{emu(22)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
-             f'<a:noFill/><a:ln><a:noFill/></a:ln></wps:spPr>'
-             f'<wps:txbx><w:txbxContent><w:p><w:pPr><w:jc w:val="center"/></w:pPr>'
-             f'<w:r><w:rPr><w:b/><w:color w:val="E3A8A8"/><w:sz w:val="56"/><w:szCs w:val="56"/></w:rPr>'
-             f'<w:t>ШИФР НЕ УТВЕРЖДЁН</w:t></w:r></w:p></w:txbxContent></wps:txbx>'
-             f'<wps:bodyPr rot="0" wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr"/></wps:wsp>')
-    return anchor('PDRD_WATERMARK', 28, 135, 170, 22, inner)
+    """Отметка «ШИФР НЕ УТВЕРЖДЁН» — стандартная подложка Word (VML textpath)."""
+    return ('<w:r><w:pict>' + SHAPETYPE_136 +
+            '<v:shape id="PDRD_WATERMARK" o:spid="_x0000_s2050" type="#_x0000_t136" o:allowincell="f" fillcolor="#e3a8a8" stroked="f" '
+            f'style="position:absolute;margin-left:0;margin-top:0;width:{pt(160)};height:{pt(20)};rotation:315;z-index:-251657216;'
+            'mso-position-horizontal:center;mso-position-horizontal-relative:page;mso-position-vertical:center;mso-position-vertical-relative:page">'
+            '<v:fill opacity=".5"/><v:textpath style="font-family:&quot;Arial&quot;;font-size:1pt" string="ШИФР НЕ УТВЕРЖДЁН"/>'
+            '<w10:wrap anchorx="page" anchory="page"/></v:shape>'
+            '</w:pict></w:r>')
 
 NS = ('xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
@@ -194,6 +192,8 @@ NS = ('xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
       'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
       'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" '
       'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+      'xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" '
+      'xmlns:w10="urn:schemas-microsoft-com:office:word" '
       'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" mc:Ignorable="w14"')
 
 def hdr_xml(tag, body):

@@ -5,7 +5,7 @@
 (function (global) {
 'use strict';
 
-var VERSION = '1.0.0';
+var VERSION = '1.0.1';
 var SCHEMA  = 'pdrd-project/1';
 var PREFIX  = 'pdrd_';
 var KEY     = 'pdrd_project_v1';
@@ -165,12 +165,7 @@ function fileName(d) {
 function exportJson() {
   var d = load();
   var blob = new Blob([JSON.stringify(d, null, 1)], { type: 'application/json' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = fileName(d);
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(function () { URL.revokeObjectURL(a.href); }, 8000);
-  return a.download;
+  return download(blob, fileName(d));
 }
 function parseProject(text) {
   var o = JSON.parse(text);
@@ -200,6 +195,27 @@ function readV25() {
     lines: (o.lines || []).length,
     raw: o
   };
+}
+
+/* Имена файлов — латиницей: одинаково открываются в Windows, macOS, iPad */
+var TR = { 'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'e','ж':'zh','з':'z','и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya' };
+function fileSafe(s) {
+  return String(s || '').split('').map(function (c) {
+    var l = c.toLowerCase(), r = TR[l];
+    if (r === undefined) return c;
+    return c === l ? r : (r.charAt(0).toUpperCase() + r.slice(1));
+  }).join('').replace(/[^\w\-.]+/g, '_');
+}
+/* Сохранение файла. Ссылка на данные живёт 10 минут: на iPad Safari сначала
+   спрашивает подтверждение, и ранний отзыв ссылки даёт пустой файл. */
+function download(data, name, type) {
+  var blob = data instanceof Blob ? data : new Blob([data], { type: type || 'application/octet-stream' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = fileSafe(name); a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 600000);
+  return a.download;
 }
 
 /* Разбор формулировки V25 «ООО "…" в интересах ПАО "…"» на подрядчика и оператора */
@@ -245,7 +261,7 @@ global.PDRD = {
   blank: blank, migrate: migrate, load: load, save: save, refresh: refresh,
   reset: reset, replaceAll: replaceAll, hasProject: hasProject,
   exportJson: exportJson, importJson: importJson, parseProject: parseProject,
-  readV25: readV25, passportGaps: passportGaps, splitParties: splitParties,
+  readV25: readV25, passportGaps: passportGaps, splitParties: splitParties, fileSafe: fileSafe, download: download,
   safeSet: safeSet
 };
 })(typeof window !== 'undefined' ? window : globalThis);

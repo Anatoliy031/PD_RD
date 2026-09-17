@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Спецификация — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.0.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.0.1">
 <style>
 .tbl{overflow-x:auto;margin-top:8px}
 table{border-collapse:collapse;width:100%;font-size:13.5px}
@@ -40,25 +40,25 @@ td.n{text-align:right;white-space:nowrap}
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="pdrd-core.js?v=1.0.0"></script>
-<script src="pdrd-norms.js?v=1.0.0"></script>
-<script src="pdrd-profiles.js?v=1.0.0"></script>
-<script src="pdrd-marks.js?v=1.0.0"></script>
-<script src="pdrd-refs-v25.js?v=1.0.0"></script>
-<script src="pdrd-calc.js?v=1.0.0"></script>
-<script src="pdrd-design.js?v=1.0.0"></script>
-<script src="pdrd-decide.js?v=1.0.0"></script>
-<script src="pdrd-spec.js?v=1.0.0"></script>
-<script src="pdrd-texts.js?v=1.0.0"></script>
-<script src="pdrd-docx.js?v=1.0.0"></script>
-<script src="pdrd-svg.js?v=1.0.0"></script>
-<script src="pdrd-xlsx.js?v=1.0.0"></script>
-<script src="pdrd-kmz.js?v=1.0.0"></script>
+<script src="pdrd-core.js?v=1.0.1"></script>
+<script src="pdrd-norms.js?v=1.0.1"></script>
+<script src="pdrd-profiles.js?v=1.0.1"></script>
+<script src="pdrd-marks.js?v=1.0.1"></script>
+<script src="pdrd-refs-v25.js?v=1.0.1"></script>
+<script src="pdrd-calc.js?v=1.0.1"></script>
+<script src="pdrd-design.js?v=1.0.1"></script>
+<script src="pdrd-decide.js?v=1.0.1"></script>
+<script src="pdrd-spec.js?v=1.0.1"></script>
+<script src="pdrd-texts.js?v=1.0.1"></script>
+<script src="pdrd-docx.js?v=1.0.1"></script>
+<script src="pdrd-svg.js?v=1.0.1"></script>
+<script src="pdrd-xlsx.js?v=1.0.1"></script>
+<script src="pdrd-kmz.js?v=1.0.1"></script>
 <script>
 (function(){
   var $ = function(id){ return document.getElementById(id); };
   function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
-  function save(data, name, type){ var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: type })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 8000); }
+  function save(data, name, type){ PDRD.download(data, name, type); }
   var d = PDRD.load();
   if (!d.poles.some(function(p){ return p.design && p.design.decision; })){ $('trace').textContent = 'Решения по опорам не приняты — см. страницу «Решения».'; return; }
   var sp = PDRD_SPEC.build(d), L = sp.lengths;
@@ -78,6 +78,6 @@ td.n{text-align:right;white-space:nowrap}
   $('bKmz').onclick = function(){ PDRD_KMZ.kmz(d).then(function(b){ save(b, (d.passport.shifr || 'PD_RD').replace(/[^\w\-]+/g,'_') + '-trassa.kmz', 'application/vnd.google-earth.kmz'); }); };
 })();
 </script>
-<script src="pdrd-nav.js?v=1.0.0"></script>
+<script src="pdrd-nav.js?v=1.0.1"></script>
 </body>
 </html>

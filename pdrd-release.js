@@ -5,15 +5,7 @@
 (function (global) {
 'use strict';
 function fetchBuf(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error('не найден ' + url); return r.arrayBuffer(); }); }
-var TR = { 'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'e','ж':'zh','з':'z','и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya' };
-/* Имена файлов — латиницей: архив открывается одинаково в Windows, macOS и iPad */
-function safe(s) {
-  return String(s || '').split('').map(function (c) {
-    var l = c.toLowerCase(), r = TR[l];
-    if (r === undefined) return c;
-    return c === l ? r : (r.charAt(0).toUpperCase() + r.slice(1));
-  }).join('').replace(/[^\w\-.]+/g, '_');
-}
+function safe(s) { return global.PDRD.fileSafe(s); }
 
 /* Заполнение всех шаблонов в памяти: для аудита и для выпуска */
 function fillAll(d, onStep) {

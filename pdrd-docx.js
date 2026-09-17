@@ -11,6 +11,8 @@
 'use strict';
 
 var W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+var XMLNS = 'http://www.w3.org/XML/1998/namespace';
+var VML = 'urn:schemas-microsoft-com:vml';
 var DASH = '—';
 var MM = 56.6929;
 
@@ -62,7 +64,7 @@ function textRun(doc, text, opt) {
   if (opt.b) rpr.push(el(doc, 'b'));
   if (opt.color) rpr.push(el(doc, 'color', { val: opt.color }));
   if (opt.sz) { rpr.push(el(doc, 'sz', { val: opt.sz })); rpr.push(el(doc, 'szCs', { val: opt.sz })); }
-  var t = el(doc, 't'); t.setAttribute('xml:space', 'preserve'); t.textContent = text;
+  var t = el(doc, 't'); t.setAttributeNS(XMLNS, 'xml:space', 'preserve'); t.textContent = text;
   return el(doc, 'r', null, [rpr.length ? el(doc, 'rPr', null, rpr) : null, t]);
 }
 function paraNode(doc, text, style, opt) {
@@ -176,7 +178,7 @@ function fillPart(xml, data, report, partName) {
       }
     });
     var fc = function (type) { return el(doc, 'r', null, [el(doc, 'fldChar', { fldCharType: type })]); };
-    var instr = el(doc, 'instrText'); instr.setAttribute('xml:space', 'preserve'); instr.textContent = ' TOC \\o "1-2" \\h \\z \\u ';
+    var instr = el(doc, 'instrText'); instr.setAttributeNS(XMLNS, 'xml:space', 'preserve'); instr.textContent = ' TOC \\o "1-2" \\h \\z \\u ';
     var ps = heads.map(function (h) {
       var tab = el(doc, 'r', null, [el(doc, 'tab')]);
       return el(doc, 'p', null, [el(doc, 'pPr', null, [el(doc, 'pStyle', { val: 'TOC' + h.lvl })]), textRun(doc, h.text), tab]);
@@ -192,6 +194,12 @@ function fillPart(xml, data, report, partName) {
 
   /* 2. Отметка неутверждённого шифра */
   if (data.approved) {
+    /* подложка VML: удаляется весь рисунок (w:pict) вместе с определением фигуры */
+    Array.prototype.slice.call(doc.getElementsByTagNameNS(VML, 'shape')).forEach(function (sh) {
+      if (sh.getAttribute('id') !== 'PDRD_WATERMARK') return;
+      var r = sh; while (r && r.localName !== 'r') r = r.parentNode;
+      if (r && r.parentNode) r.parentNode.removeChild(r);
+    });
     var props = doc.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing', 'docPr');
     Array.prototype.slice.call(props).forEach(function (dp) {
       if (dp.getAttribute('name') !== 'PDRD_WATERMARK') return;
@@ -215,13 +223,15 @@ function fillPart(xml, data, report, partName) {
       return String(v);
     });
   }
-  return new XMLSerializer().serializeToString(doc);
+  var s = new XMLSerializer().serializeToString(doc);
+  if (s.indexOf('<?xml') !== 0) s = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' + s;
+  return s;
 }
 
 /* ---------------------------------------------------------------- том целиком */
 function fillDocx(buffer, data) {
   var report = { missing: [], errors: [], filled: 0 };
-  return JSZip.loadAsync(buffer).then(function (zip) {
+  return JSZip.loadAsync(buffer, { createFolders: false }).then(function (zip) {
     var parts = Object.keys(zip.files).filter(function (n) {
       return /^word\/(document|header\d+|footer\d+)\.xml$/.test(n);
     });
@@ -232,7 +242,14 @@ function fillDocx(buffer, data) {
     })).then(function () {
       var seen = {};
       report.missing = report.missing.filter(function (x) { var k = x.key; if (seen[k]) return false; seen[k] = 1; return true; });
-      return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+      /* новый пакет: только файлы, без записей-папок; [Content_Types].xml — первым */
+      var names = Object.keys(zip.files).filter(function (n) { return !zip.files[n].dir; });
+      names.sort(function (a, b) { return (a === '[Content_Types].xml' ? -1 : 0) - (b === '[Content_Types].xml' ? -1 : 0); });
+      var out = new JSZip();
+      return Promise.all(names.map(function (n) { return zip.file(n).async('uint8array'); })).then(function (bufs) {
+        names.forEach(function (n, i) { out.file(n, bufs[i], { createFolders: false }); });
+        return out.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      })
         .then(function (blob) { return { blob: blob, report: report }; });
     });
   });

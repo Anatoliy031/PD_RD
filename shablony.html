@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Шаблоны томов — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.0.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.0.1">
 <style>
 .vols{list-style:none;margin:0;padding:0}
 .vols li{padding:12px 0;border-bottom:1px solid var(--line-s)}
@@ -33,24 +33,25 @@
     <label class="switch"><input type="radio" name="src" value="demo" checked> Пример по пилоту (Новоджерелиевская)</label>
     <label class="switch"><input type="radio" name="src" value="project"> Данные проекта из этого браузера</label>
     <p class="small" style="color:var(--muted);font-size:13px;margin:0">Таблицы и тексты разделов появятся после расчётов; сейчас на их месте — красная пометка. Каждый пробел выводится в перечне под томом.</p>
+    <p class="small" style="color:var(--muted);font-size:13px;margin:6px 0 0">На iPad: после нажатия подтвердите загрузку, затем откройте файл из «Файлы» → «Загрузки» в Word, «Р7-Офис» или Pages.</p>
   </section>
   <section class="panel">
     <ul class="vols" id="vols"></ul>
   </section>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="pdrd-core.js?v=1.0.0"></script>
-<script src="pdrd-norms.js?v=1.0.0"></script>
-<script src="pdrd-profiles.js?v=1.0.0"></script>
-<script src="pdrd-marks.js?v=1.0.0"></script>
-<script src="pdrd-refs-v25.js?v=1.0.0"></script>
-<script src="pdrd-calc.js?v=1.0.0"></script>
-<script src="pdrd-design.js?v=1.0.0"></script>
-<script src="pdrd-decide.js?v=1.0.0"></script>
-<script src="pdrd-spec.js?v=1.0.0"></script>
-<script src="pdrd-texts.js?v=1.0.0"></script>
-<script src="pdrd-svg.js?v=1.0.0"></script>
-<script src="pdrd-docx.js?v=1.0.0"></script>
+<script src="pdrd-core.js?v=1.0.1"></script>
+<script src="pdrd-norms.js?v=1.0.1"></script>
+<script src="pdrd-profiles.js?v=1.0.1"></script>
+<script src="pdrd-marks.js?v=1.0.1"></script>
+<script src="pdrd-refs-v25.js?v=1.0.1"></script>
+<script src="pdrd-calc.js?v=1.0.1"></script>
+<script src="pdrd-design.js?v=1.0.1"></script>
+<script src="pdrd-decide.js?v=1.0.1"></script>
+<script src="pdrd-spec.js?v=1.0.1"></script>
+<script src="pdrd-texts.js?v=1.0.1"></script>
+<script src="pdrd-svg.js?v=1.0.1"></script>
+<script src="pdrd-docx.js?v=1.0.1"></script>
 <script>
 (function(){
   var D = PDRD_DOCX, $ = function(id){ return document.getElementById(id); };
@@ -78,11 +79,7 @@
     return document.querySelector('input[name=src]:checked').value === 'demo' ? demoProject() : PDRD.load();
   }
 
-  function save(blob, name){
-    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 8000);
-  }
+  function save(blob, name){ PDRD.download(blob, name); }
 
   D.TEMPLATES.forEach(function(t){
     var li = el('li');
@@ -111,7 +108,7 @@
         .then(function(buf){ return D.fillDocx(buf, D.dataFromProject(d, t)); })
         .then(function(res){
           var name = (d.passport.shifr || 'PD_RD') + '-' + t.code + (d.passport.shifrApproved ? '' : '_proekt') + '.docx';
-          save(res.blob, name.replace(/[^\wА-Яа-яЁё\-.]+/g, '_'));
+          save(res.blob, name);
           var r = res.report;
           var m = el('div', 'msg ' + (r.missing.length ? 'warn' : 'ok'),
             'Файл сформирован. Подставлено значений: ' + r.filled + '. Не заполнено: ' + r.missing.length + (r.missing.length ? ' — выпуск будет заблокирован.' : '.'));
@@ -128,6 +125,6 @@
   });
 })();
 </script>
-<script src="pdrd-nav.js?v=1.0.0"></script>
+<script src="pdrd-nav.js?v=1.0.1"></script>
 </body>
 </html>

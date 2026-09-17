@@ -120,6 +120,7 @@ if (DX) {
   function fill(inner, data){ var rep = { missing:[], errors:[], filled:0 }; var x = DX.fillPart(docX(inner), data, rep, 'document.xml'); return { x:x, r:rep }; }
   t('Шаблон: поле подставляется, пустое → «—» и пробел', function(){
     var o = fill(P_('Объект {{ОБЪЕКТ_НАИМ}}, ГИП {{ГИП_ФИО}}'), { fields:{ 'ГИП_ФИО':'Е.В. Куличкин', 'ОБЪЕКТ_НАИМ':'' } });
+    eq(o.x.indexOf('<?xml') === 0, true, 'объявление XML');
     eq(o.x.indexOf('Объект —, ГИП Е.В. Куличкин') >= 0, true, 'текст'); eq(o.r.missing.length, 1, 'пробелов'); eq(o.r.missing[0].key, 'ОБЪЕКТ_НАИМ');
     return 'подставлено 1, пробел 1';
   });
@@ -144,7 +145,7 @@ if (DX) {
     return 'КАБЕЛЬ вставлена, ОПОРЫ — пробел';
   });
   t('Шаблон: отметка «ШИФР НЕ УТВЕРЖДЁН» снимается только при утверждённом шифре', function(){
-    var shape = '<w:p><w:r><w:drawing><wp:anchor><wp:docPr id="1" name="PDRD_WATERMARK"/></wp:anchor></w:drawing></w:r></w:p>';
+    var shape = '<w:p><w:r><w:pict xmlns:v="urn:schemas-microsoft-com:vml"><v:shape id="PDRD_WATERMARK"/></w:pict></w:r></w:p>';
     eq(fill(shape, { approved:false }).x.indexOf('PDRD_WATERMARK') >= 0, true, 'не утверждён — отметка есть');
     eq(fill(shape, { approved:true }).x.indexOf('PDRD_WATERMARK') < 0, true, 'утверждён — отметки нет');
     return 'работает';
