@@ -629,7 +629,7 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     eq(!!sh, true, 'есть лист с примечаниями');
     var n = sh.p.filter(function(e){ return e.t === 'text' && e.s === 'Примечания:'; })[0];
     eq(!!n, true, 'заголовок примечаний');
-    eq(n.x >= PDRD_SVG.W - 5 - 185 - 0.1, true, 'справа');
+    eq(n.x + 250 >= PDRD_SVG.W - 20, true, 'блок прижат к правому краю');
     eq(n.y > PDRD_SVG.H / 2, true, 'снизу');
     return 'блок примечаний на месте';
   });
@@ -682,6 +682,39 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     near(w[4], 30.05, 1e-9, 'X центра первого пикселя');
     near(w[5], 277 - 0.05, 1e-9, 'Y центра первого пикселя');
     return 'привязка верна';
+  });
+  t('Топооснова OSM: разбор данных и классификация', function(){
+    var O = window.PDRD_OSM;
+    eq(/way\["highway"\]/.test(O.query({ n:45.31, s:45.29, e:39.11, w:39.09 })), true, 'запрос дорог');
+    eq(O.classify({ highway:'residential', name:'ул. Ленина' }).kind, 'road', 'дорога');
+    eq(O.classify({ building:'house', 'addr:housenumber':'12' }).label, '12', 'номер дома');
+    eq(O.classify({ waterway:'river', name:'Кирпили' }).kind, 'water', 'река');
+    eq(O.classify({ railway:'rail' }).kind, 'rail', 'железная дорога');
+    eq(O.classify({ amenity:'bench' }), null, 'лишнее отбрасывается');
+    var f = O.parse({ elements: [
+      { geometry:[{ lat:45, lon:39 }, { lat:45.001, lon:39.001 }], tags:{ highway:'primary', name:'А-146' } },
+      { geometry:[{ lat:45, lon:39 }, { lat:45, lon:39.0002 }, { lat:45.0002, lon:39.0002 }, { lat:45, lon:39 }], tags:{ building:'yes', 'addr:housenumber':'7' } },
+      { geometry:[{ lat:45, lon:39 }], tags:{ highway:'track' } } ] });
+    eq(f.length, 2, 'разобрано объектов'); eq(f[1].closed, true, 'здание замкнуто');
+    return 'дороги, здания, вода, ж/д';
+  });
+  t('Топооснова на плане: линии на слоях КАРТА_* и подписи улиц', function(){
+    var d0 = window.PDRD_DEMO.build();
+    var feats = [];
+    for (var i = 0; i < 6; i++) feats.push({ kind:'road', label:'ул. Проверочная ' + (i + 1), w:0.5, closed:false,
+      pts:[[45.2995 + i * 0.0008, 39.0975], [45.2995 + i * 0.0008, 39.1045]] });
+    feats.push({ kind:'water', label:'р. Проверочная', w:0.6, closed:false, pts:[[45.295, 39.095], [45.302, 39.100], [45.309, 39.104]] });
+    feats.push({ kind:'building', label:'15', w:0.25, closed:true, pts:[[45.3005, 39.0995], [45.3005, 39.0997], [45.3007, 39.0997], [45.3005, 39.0995]] });
+    d0.mapVector = { features: feats, counts: { road:6, water:1, building:1 }, attr:'© OpenStreetMap contributors (ODbL)' };
+    PDRD_SVG.reset(d0);
+    var pl = PDRD_SVG.sheets(d0).filter(function(s){ return s.meta.kind === 'plan'; })[0];
+    eq(pl.p.some(function(e){ return e.l === 'КАРТА_ДОРОГИ'; }), true, 'дороги');
+    eq(pl.p.some(function(e){ return e.l === 'КАРТА_ВОДА'; }), true, 'вода');
+    eq(pl.p.some(function(e){ return e.t === 'text' && e.l === 'КАРТА_ПОДПИСИ' && /Проверочная/.test(e.s); }), true, 'подписи улиц');
+    eq(pl.notes.some(function(n){ return /OpenStreetMap/.test(n); }), true, 'ссылка на источник');
+    var dxf = PDRD_DXF.parse(PDRD_DXF.toDxf(pl));
+    eq(dxf.layers.indexOf('КАРТА_ДОРОГИ') >= 0 && dxf.layers.indexOf('КАРТА_ПОДПИСИ') >= 0, true, 'слои в DXF');
+    return 'основа в SVG и DXF';
   });
   t('Карта: источники и проекции (EPSG:3857 и EPSG:3395)', function(){
     var ids = PDRD_MAP.SOURCES.map(function(s){ return s.id; });

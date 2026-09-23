@@ -100,5 +100,28 @@ function removeUnderlay(d) {
   d.mapUnderlayMeta = null; d.mapUnderlay = null;
   return m && m.key ? del(m.key).catch(function () { return true; }) : Promise.resolve(true);
 }
-global.PDRD_MEDIA = { saveUnderlayData: saveUnderlayData, put: put, get: get, del: del, fileToDataUrl: fileToDataUrl, saveUnderlay: saveUnderlay, loadUnderlay: loadUnderlay, removeUnderlay: removeUnderlay };
+/* Векторная топооснова OSM: данные — в IndexedDB, сведения — в проекте */
+function saveVector(d, data) {
+  var key = 'osmvec_' + Date.now().toString(36);
+  return put(key, JSON.stringify(data.features)).then(function () {
+    d.mapVectorMeta = { key: key, at: data.at, bbox: data.bbox, counts: data.counts, attr: data.attr, count: data.features.length };
+    d.mapVector = { features: data.features, counts: data.counts, attr: data.attr };
+    return d.mapVectorMeta;
+  });
+}
+function loadVector(d) {
+  var m = d.mapVectorMeta;
+  if (!m || !m.key) { d.mapVector = null; return Promise.resolve(null); }
+  return get(m.key).then(function (s) {
+    d.mapVector = s ? { features: JSON.parse(s), counts: m.counts, attr: m.attr } : null;
+    return d.mapVector;
+  }).catch(function () { d.mapVector = null; return null; });
+}
+function removeVector(d) {
+  var m = d.mapVectorMeta;
+  d.mapVectorMeta = null; d.mapVector = null;
+  return m && m.key ? del(m.key).catch(function () { return true; }) : Promise.resolve(true);
+}
+
+global.PDRD_MEDIA = { saveVector: saveVector, loadVector: loadVector, removeVector: removeVector, saveUnderlayData: saveUnderlayData, put: put, get: get, del: del, fileToDataUrl: fileToDataUrl, saveUnderlay: saveUnderlay, loadUnderlay: loadUnderlay, removeUnderlay: removeUnderlay };
 })(typeof window !== 'undefined' ? window : globalThis);

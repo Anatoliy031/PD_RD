@@ -10,8 +10,12 @@
 var W = 420, H = 297, FL = 20, FO = 5;
 var STAMP_W = 185, STAMP_H = 55;
 var FILL_MIN = 0.70;
-var LAYERS = ['РАМКА', 'ШТАМП', 'ВЛ_ОПОРЫ', 'ВЛ_ПРОВОДА', 'ВОЛС', 'МУФТЫ', 'РАЗМЕРЫ', 'ТЕКСТ', 'ПЕРЕСЕЧЕНИЯ', 'ПОДЛОЖКА'];
-var COLORS = { 'РАМКА': '#000', 'ШТАМП': '#000', 'ВЛ_ОПОРЫ': '#222', 'ВЛ_ПРОВОДА': '#6f6f6f', 'ВОЛС': '#0a58a8', 'МУФТЫ': '#b02a1f', 'РАЗМЕРЫ': '#444', 'ТЕКСТ': '#000', 'ПЕРЕСЕЧЕНИЯ': '#7a4d00', 'ПОДЛОЖКА': '#888' };
+var NOTE_W = 250;          // ширина блока примечаний над основной надписью, мм
+var LAYERS = ['РАМКА', 'ШТАМП', 'ВЛ_ОПОРЫ', 'ВЛ_ПРОВОДА', 'ВОЛС', 'МУФТЫ', 'РАЗМЕРЫ', 'ТЕКСТ', 'ПЕРЕСЕЧЕНИЯ', 'ПОДЛОЖКА',
+              'КАРТА_ДОРОГИ', 'КАРТА_ЗДАНИЯ', 'КАРТА_ВОДА', 'КАРТА_ЖД', 'КАРТА_УГОДЬЯ', 'КАРТА_ПОДПИСИ'];
+var COLORS = { 'РАМКА': '#000', 'ШТАМП': '#000', 'ВЛ_ОПОРЫ': '#222', 'ВЛ_ПРОВОДА': '#6f6f6f', 'ВОЛС': '#0a58a8', 'МУФТЫ': '#b02a1f', 'РАЗМЕРЫ': '#444', 'ТЕКСТ': '#000', 'ПЕРЕСЕЧЕНИЯ': '#7a4d00', 'ПОДЛОЖКА': '#888',
+  'КАРТА_ДОРОГИ': '#7a6a52', 'КАРТА_ЗДАНИЯ': '#8a7a6a', 'КАРТА_ВОДА': '#2f7fae', 'КАРТА_ЖД': '#555',
+  'КАРТА_УГОДЬЯ': '#8aa77a', 'КАРТА_ПОДПИСИ': '#5a5a5a' };
 /* Размеры шрифтов, мм */
 var FS = { min: 2.5, small: 2.5, text: 3.5, head: 5, stamp: 2.5, stampSmall: 2.2 };
 var SCALES = [200, 250, 500, 750, 1000, 1250, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 8000, 10000, 12500, 15000, 20000, 25000, 40000, 50000, 75000, 100000, 200000];
@@ -54,20 +58,20 @@ function zone(sh) {
 }
 function notesHeight(sh) {
   if (!sh.notes.length) return 0;
-  var lines = 0;
-  sh.notes.forEach(function (n) { lines += Math.ceil(tw(n, FS.small) / (STAMP_W - 4)); });
-  return lines * FS.small * 1.35 + 4;
+  var lines = 1;
+  sh.notes.forEach(function (n) { lines += Math.ceil(tw(n, FS.small) / (NOTE_W - 4)); });
+  return lines * FS.small * 1.35 + 3;
 }
 function drawNotes(sh) {
   if (!sh.notes.length) return;
-  var x = W - FO - STAMP_W, top = H - FO - STAMP_H - notesHeight(sh) + 2;
+  var x = W - FO - 5 - NOTE_W, top = H - FO - STAMP_H - notesHeight(sh) + 2;
   var y = top;
   sh.text(x, y, 'Примечания:', FS.small, { b: true });
   y += FS.small * 1.35;
   sh.notes.forEach(function (n) {
     var words = String(n).split(' '), cur = '';
     words.forEach(function (w2) {
-      if (tw(cur + ' ' + w2, FS.small) > STAMP_W - 4 && cur) { sh.text(x, y, cur, FS.small); y += FS.small * 1.35; cur = w2; }
+      if (tw(cur + ' ' + w2, FS.small) > NOTE_W - 4 && cur) { sh.text(x, y, cur, FS.small); y += FS.small * 1.35; cur = w2; }
       else cur = (cur + ' ' + w2).trim();
     });
     if (cur) { sh.text(x, y, cur, FS.small); y += FS.small * 1.35; }
@@ -244,10 +248,11 @@ function planSheets(d) {
   var segs = segments(d);
   var pts = d.poles.filter(function (p) { return p.coords && p.coords.lat !== null; });
   if (!pts.length) return [];
+  var vec = d.mapVector && d.mapVector.features ? d.mapVector : null;
   var u0 = d.mapUnderlay;
   var und = u0 && u0.nw && u0.se && (u0.dataUrl || (u0.tiles && u0.tiles.length)) ? u0 : null;
   var out = [];
-  var Z = { x0: FL + 5, y0: FO + 5, x1: W - FO - 5, y1: H - FO - STAMP_H - 30 };
+  var Z = { x0: FL + 5, y0: FO + 5, x1: W - FO - 5, y1: H - FO - STAMP_H - 38 };
 
   function rotator(rot) {
     var c = Math.cos(rot), s = Math.sin(rot);
@@ -299,6 +304,13 @@ function planSheets(d) {
       });
       if (und.attr) sh.note('Картографическая основа: ' + und.attr + '.');
       if (und.mode === 'tiles') sh.note('Карта выводится ссылками на тайлы сервиса: видна в просмотре и при печати (в том числе «Печать → Сохранить как PDF»); в PDF из программы и в архив DXF не попадает — для этого используйте источник, разрешающий чтение изображений (например, OpenStreetMap), или загрузите своё изображение.');
+    }
+    if (vec && vec.features && vec.features.length) {
+      var nDrawn = drawVector(sh, vec.features, function (la, lo) { return XYm(pr.x(lo), pr.y(la)); }, Z, sc);
+      if (nDrawn) {
+        sh.note('Топографическая основа — данные OpenStreetMap (© OpenStreetMap contributors, ODbL): улицы и дороги с названиями, здания с номерами домов, водотоки, водоёмы, железные дороги. Основа векторная, выгружается в PDF и DXF на слоях КАРТА_*.');
+        if (sc > 2500) sh.note('Номера домов печатаются на фрагментах масштаба 1:2500 и крупнее.');
+      }
     }
     var inv = rotator(-rot), ctr = inv(cx, cy);
     grid(sh, Z, pr, XYm, sc, ctr);
@@ -356,10 +368,10 @@ function planSheets(d) {
     }
     sh.note('Система координат — WGS-84. Углы рабочего поля: левый верхний ' + dms(c1[0]) + ' с. ш., ' + dms(c1[1]) + ' в. д.; правый нижний ' + dms(c2[0]) + ' с. ш., ' + dms(c2[1]) + ' в. д. Сетка — параллели и меридианы с подписями.');
     if (rot) sh.note('План развёрнут для размещения трассы вдоль листа: направление на север — по стрелке.');
-    sh.note('Условные обозначения: тонкая линия — существующая ВЛ; утолщённая — проектируемая ВОЛС; точка — опора ВЛ; треугольник — муфта и запас кабеля; окружность — опора, исключённая из размещения или с размещением после восстановления владельцем.');
+    sh.note('Обозначения: тонкая линия — существующая ВЛ; утолщённая — проектируемая ВОЛС; точка — опора; треугольник — муфта и запас; окружность — опора, исключённая или с размещением после восстановления владельцем.');
     if (Math.max(f.w, f.h) < FILL_MIN) sh.note('Заполнение листа ограничено принятым стандартным масштабом ' + 'М 1:' + sc + ' и конфигурацией участка трассы.');
-    sh.note(und ? ('Подложка: ' + (und.name || 'растровая подложка') + ', привязана по координатам углов; в архив DXF прикладываются растр и файл привязки .wld для подключения в САПР.')
-                : 'Растровая подложка не задана (страница «Чертежи» → «Подложка»). Трасса дополнительно передаётся файлом KMZ для просмотра на картографической основе.');
+    if (und) sh.note('Подложка: ' + (und.name || 'растр') + ', привязана по координатам углов; в архив DXF прикладываются растр и файл привязки .jgw.');
+    else if (!vec) sh.note('Подложка не задана (страница «Чертежи»). Трасса передаётся также файлом KMZ для просмотра на картографической основе.');
   }
 
   /* обзорный лист: план разворачивается вдоль листа, если это увеличивает заполнение */
@@ -485,6 +497,60 @@ function scaleBar(sh, x, y, sc) {
   sh.text(x, y + 5, '0', FS.small, { a: 'middle' });
   sh.text(x + len, y + 5, fm(m, 0) + ' м', FS.small, { a: 'middle' });
   sh.text(x + len / 2, y - 3, 'М 1:' + sc, FS.text, { a: 'middle', b: true });
+}
+
+/* Векторная топооснова OSM: дороги, здания, вода, железные дороги и подписи.
+   Всё рисуется примитивами, поэтому попадает и в PDF, и в DXF (свои слои). */
+function drawVector(sh, feats, Pll, z, sc) {
+  if (!feats || !feats.length) return 0;
+  var drawn = 0, named = {}, order = { landuse: 0, waterarea: 1, water: 2, building: 3, rail: 4, road: 5 };
+  var labelRoads = sc <= 12000, labelHouses = sc <= 2500, labelWater = sc <= 25000;
+  var list = feats.slice().sort(function (a, b) { return (order[a.kind] || 9) - (order[b.kind] || 9); });
+  list.forEach(function (f) {
+    var pts = f.pts.map(function (c) { return Pll(c[0], c[1]); });
+    var vis = pts.some(function (q) { return q[0] >= z.x0 - 20 && q[0] <= z.x1 + 20 && q[1] >= z.y0 - 20 && q[1] <= z.y1 + 20; });
+    if (!vis) return;
+    var layer = { road: 'КАРТА_ДОРОГИ', building: 'КАРТА_ЗДАНИЯ', water: 'КАРТА_ВОДА', waterarea: 'КАРТА_ВОДА',
+                  rail: 'КАРТА_ЖД', landuse: 'КАРТА_УГОДЬЯ' }[f.kind] || 'КАРТА_ДОРОГИ';
+    if (f.closed) {
+      var ok = false;
+      for (var i = 1; i < pts.length; i++) { var s2 = clipSeg(pts[i - 1], pts[i], z); if (s2) { sh.line(s2[0][0], s2[0][1], s2[1][0], s2[1][1], layer, f.w, f.dash); ok = true; } }
+      if (ok) drawn++;
+    } else {
+      for (var k = 1; k < pts.length; k++) {
+        var s3 = clipSeg(pts[k - 1], pts[k], z);
+        if (s3) { sh.line(s3[0][0], s3[0][1], s3[1][0], s3[1][1], layer, f.w, f.dash); drawn++; }
+      }
+    }
+    if (!f.label) return;
+    if (f.kind === 'building') {
+      if (!labelHouses) return;
+      var cx = 0, cy = 0;
+      pts.forEach(function (q) { cx += q[0]; cy += q[1]; });
+      cx /= pts.length; cy /= pts.length;
+      if (cx < z.x0 || cx > z.x1 || cy < z.y0 || cy > z.y1) return;
+      sh.text(cx, cy + 0.9, f.label, FS.min, { a: 'middle', l: 'КАРТА_ПОДПИСИ', max: 12 });
+      return;
+    }
+    if (f.kind === 'road' && !labelRoads) return;
+    if ((f.kind === 'water' || f.kind === 'waterarea') && !labelWater) return;
+    var cnt = named[f.label] || 0;
+    if (cnt >= 2) return;
+    /* подпись вдоль самого длинного видимого звена */
+    var best = null, bl = 0;
+    for (var m = 1; m < pts.length; m++) {
+      var c2 = clipSeg(pts[m - 1], pts[m], z); if (!c2) continue;
+      var L2 = Math.hypot(c2[1][0] - c2[0][0], c2[1][1] - c2[0][1]);
+      if (L2 > bl) { bl = L2; best = c2; }
+    }
+    if (!best || bl < tw(f.label, FS.small) * 1.1) return;
+    var mx = (best[0][0] + best[1][0]) / 2, my = (best[0][1] + best[1][1]) / 2;
+    var ang = Math.atan2(best[1][1] - best[0][1], best[1][0] - best[0][0]) * 180 / Math.PI;
+    if (ang > 90) ang -= 180; else if (ang < -90) ang += 180;
+    sh.text(mx, my - 1, f.label, FS.small, { a: 'middle', rot: ang, l: 'КАРТА_ПОДПИСИ', max: bl });
+    named[f.label] = cnt + 1;
+  });
+  return drawn;
 }
 
 /* ---------------------------------------------------------------- ЭКУ и скелетная схема */
@@ -927,6 +993,6 @@ function toSvg(sh) {
   return o.join('');
 }
 
-global.PDRD_SVG = { reset: reset, W: W, H: H, LAYERS: LAYERS, FS: FS, Sheet: Sheet, sheets: sheets, sheetList: sheetList,
+global.PDRD_SVG = { reset: reset, drawVector: drawVector, W: W, H: H, LAYERS: LAYERS, FS: FS, Sheet: Sheet, sheets: sheets, sheetList: sheetList,
   toSvg: toSvg, ekus: ekus, segments: segments, poleSymbol: poleSymbol, surname: surname, fitSheet: fitSheet, bbox: bbox, zone: zone, projection: projection };
 })(typeof window !== 'undefined' ? window : globalThis);
