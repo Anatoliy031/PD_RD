@@ -683,6 +683,53 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     near(w[5], 277 - 0.05, 1e-9, 'Y центра первого пикселя');
     return 'привязка верна';
   });
+  t('Карта: источники и проекции (EPSG:3857 и EPSG:3395)', function(){
+    var ids = PDRD_MAP.SOURCES.map(function(s){ return s.id; });
+    ['yandex-map','yandex-sat','yandex-hyb','google-map','google-sat','google-hyb','osm','custom'].forEach(function(id){
+      if (ids.indexOf(id) < 0) throw new Error('нет источника ' + id);
+    });
+    var yg = PDRD_MAP.lat2y(45.3, 16, 'google'), yy = PDRD_MAP.lat2y(45.3, 16, 'yandex');
+    eq(Math.abs(yg - yy) > 10, true, 'проекции различаются');
+    near(PDRD_MAP.y2lat(yy, 16, 'yandex'), 45.3, 1e-6, 'обратное преобразование Яндекса');
+    near(PDRD_MAP.y2lat(yg, 16, 'google'), 45.3, 1e-6, 'обратное преобразование Google');
+    eq(PDRD_MAP.byId('yandex-hyb').layers.length, 2, 'гибрид — два слоя');
+    return 'источников: ' + ids.length;
+  });
+  t('Карта: перечень тайлов на трассу и их привязка', function(){
+    var p = PDRD_MAP.plan(PDRD_MAP.routeBbox(demo), { source:'osm', maxZoom:16 });
+    eq(p.tiles.length > 0, true, 'тайлы'); eq(p.z <= 16, true, 'уровень');
+    var t0 = p.tiles[0];
+    eq(t0.nw.lat > t0.se.lat && t0.se.lon > t0.nw.lon, true, 'углы тайла');
+    eq(/16\/\d+\/\d+/.test(t0.url), true, 'адрес тайла');
+    var g = PDRD_MAP.plan(PDRD_MAP.routeBbox(demo), { source:'google-hyb', maxZoom:16 });
+    eq(/mt[0-3]\.google/.test(g.tiles[0].url), true, 'поддомены Google');
+    return p.tiles.length + ' тайлов';
+  });
+  t('Подложка из тайлов: на план попадают все тайлы с обрезкой по рамке', function(){
+    var d0 = window.PDRD_DEMO.build();
+    var p = PDRD_MAP.plan(PDRD_MAP.routeBbox(d0), { source:'yandex-map', maxZoom:16 });
+    d0.mapUnderlay = { mode:'tiles', tiles: p.tiles.map(function(x){ return { url:x.url, nw:x.nw, se:x.se }; }), nw:p.nw, se:p.se, attr:'© Яндекс.Карты' };
+    PDRD_SVG.reset(d0);
+    var pl = PDRD_SVG.sheets(d0).filter(function(s){ return s.meta.kind === 'plan'; });
+    eq(pl.length > 0, true, 'планы');
+    var im = pl[0].p.filter(function(e){ return e.t === 'image'; });
+    eq(im.length > 0, true, 'тайлы на листе');
+    eq(im.every(function(e){ return e.remote && e.clip; }), true, 'ссылки с обрезкой');
+    eq(PDRD_MAP.hasRemote(pl[0]), true, 'признак внешних тайлов');
+    eq(pl[0].notes.some(function(n){ return /Яндекс/.test(n); }), true, 'ссылка на источник в примечаниях');
+    return im.length + ' тайлов на листе';
+  });
+  t('Подложка-растр: попадает в лист и в файл привязки', function(){
+    var d0 = window.PDRD_DEMO.build();
+    var px = 'data:image/png;base64,iVBORw0KGgo=';
+    d0.mapUnderlay = { mode:'image', dataUrl: px, nw:{ lat:45.32, lon:39.09 }, se:{ lat:45.28, lon:39.12 }, attr:'© OpenStreetMap contributors (ODbL)', name:'Карта' };
+    PDRD_SVG.reset(d0);
+    var pl = PDRD_SVG.sheets(d0).filter(function(s){ return s.meta.kind === 'plan'; })[0];
+    var im = PDRD_MAP.imageOf(pl);
+    eq(!!im, true, 'растр на листе'); eq(im.remote, false, 'локальный растр');
+    eq(PDRD_MAP.worldFile(im, PDRD_SVG.H, 1000, 1000).split(/\r?\n/).length >= 6, true, 'файл привязки');
+    return 'ок';
+  });
   t('Карта: выбор масштабного уровня и рамка трассы', function(){
     var bb = PDRD_MAP.routeBbox(demo);
     eq(bb.n > bb.s && bb.e > bb.w, true, 'рамка');

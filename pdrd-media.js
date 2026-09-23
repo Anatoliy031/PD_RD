@@ -56,7 +56,7 @@ function saveUnderlay(d, file, nw, se) {
     var key = 'underlay_' + Date.now().toString(36);
     return put(key, url).then(function () {
       d.mapUnderlayMeta = { key: key, name: file.name, size: file.size, nw: nw, se: se, at: new Date().toISOString() };
-      d.mapUnderlay = { dataUrl: url, name: file.name, nw: nw, se: se };
+      d.mapUnderlay = { mode: 'image', dataUrl: url, name: file.name, nw: nw, se: se };
       return d.mapUnderlayMeta;
     });
   });
@@ -64,20 +64,34 @@ function saveUnderlay(d, file, nw, se) {
 /* Сохранение подложки, уже полученной как data:URL (например, карта из тайлов) */
 function saveUnderlayData(d, dataUrl, name, nw, se, extra) {
   extra = extra || {};
+  var mode = extra.mode || 'image';
+  var meta = { name: name, nw: nw, se: se, at: new Date().toISOString(), mode: mode,
+               attr: extra.attr || '', source: extra.source || '', zoom: extra.zoom || null,
+               tiles: mode === 'tiles' ? extra.tiles || [] : null, size: dataUrl ? Math.round(dataUrl.length * 0.75) : 0 };
+  if (mode === 'tiles') {
+    d.mapUnderlayMeta = meta;
+    d.mapUnderlay = { mode: mode, tiles: meta.tiles, name: name, nw: nw, se: se, attr: meta.attr };
+    return Promise.resolve(meta);
+  }
   var key = 'underlay_' + Date.now().toString(36);
+  meta.key = key;
   return put(key, dataUrl).then(function () {
-    d.mapUnderlayMeta = { key: key, name: name, size: Math.round(dataUrl.length * 0.75), nw: nw, se: se, at: new Date().toISOString(),
-                          attr: extra.attr || '', source: extra.source || '', zoom: extra.zoom || null };
-    d.mapUnderlay = { dataUrl: dataUrl, name: name, nw: nw, se: se, attr: extra.attr || '' };
-    return d.mapUnderlayMeta;
+    d.mapUnderlayMeta = meta;
+    d.mapUnderlay = { mode: 'image', dataUrl: dataUrl, name: name, nw: nw, se: se, attr: meta.attr };
+    return meta;
   });
 }
 
 function loadUnderlay(d) {
   var m = d.mapUnderlayMeta;
-  if (!m || !m.key) { d.mapUnderlay = null; return Promise.resolve(null); }
+  if (!m) { d.mapUnderlay = null; return Promise.resolve(null); }
+  if (m.mode === 'tiles') {
+    d.mapUnderlay = { mode: 'tiles', tiles: m.tiles || [], name: m.name, nw: m.nw, se: m.se, attr: m.attr || '' };
+    return Promise.resolve(d.mapUnderlay);
+  }
+  if (!m.key) { d.mapUnderlay = null; return Promise.resolve(null); }
   return get(m.key).then(function (url) {
-    d.mapUnderlay = url ? { dataUrl: url, name: m.name, nw: m.nw, se: m.se, attr: m.attr || '' } : null;
+    d.mapUnderlay = url ? { mode: 'image', dataUrl: url, name: m.name, nw: m.nw, se: m.se, attr: m.attr || '' } : null;
     return d.mapUnderlay;
   }).catch(function () { d.mapUnderlay = null; return null; });
 }

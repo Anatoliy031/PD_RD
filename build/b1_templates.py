@@ -16,7 +16,7 @@ import os, sys, zipfile, datetime
 from xml.sax.saxutils import escape
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VERSION = '1.2.0'
+VERSION = '1.3.0'
 
 MM = 56.6929  # twips в мм
 def tw(mm): return int(round(mm * MM))

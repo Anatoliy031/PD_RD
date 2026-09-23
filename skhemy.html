@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Чертежи — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.2.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.3.0">
 <style>
 .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 14px}
 .frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
@@ -48,13 +48,13 @@
   </section>
   <section class="panel">
     <h2>Подложка ситуационного плана</h2>
-    <p class="sub">Растровая подложка (снимок или выкопировка) привязывается по координатам северо-западного и юго-восточного углов изображения — как в Google Earth: «Добавить» → «Наложение изображения» → вкладка «Местоположение». Подложка хранится в этом браузере и в файл проекта не входит; в DXF не выгружается.</p>
+    <p class="sub">Карта подтягивается из тех же источников, что и в карте ВОЛС: Яндекс (схема, спутник, гибрид), Google (схема, спутник, гибрид), OpenStreetMap или свой сервис тайлов. Подложка привязывается по координатам, разворачивается вместе с планом и обрезается по рамке. Можно также загрузить своё изображение (выкопировку, снимок), указав координаты его углов — как в Google Earth: «Добавить» → «Наложение изображения» → «Местоположение». Подложка хранится в этом браузере и в файл проекта не входит. Использование тайлов — по условиям выбранного сервиса.</p>
     <div class="frm" id="und"></div>
     <div class="frm" style="margin-top:10px">
       <div>
         <label for="mapSrc">Источник карты</label>
         <select id="mapSrc" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:15px"></select>
-        <div class="hint">Карта скачивается из выбранного источника и сохраняется в браузере; ссылка на источник печатается в примечаниях листа.</div>
+        <div class="hint">Яндекс и Google не разрешают читать пиксели тайлов: их карта видна в просмотре и при печати (в том числе «Печать → Сохранить как PDF»), но не попадает в PDF из программы и в архив DXF. OpenStreetMap и своё изображение попадают везде.</div>
       </div>
       <div>
         <label for="mapUrl">Адрес тайлов (для своего источника)</label>
@@ -81,22 +81,22 @@
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="pdrd-core.js?v=1.2.0"></script>
-<script src="pdrd-norms.js?v=1.2.0"></script>
-<script src="pdrd-profiles.js?v=1.2.0"></script>
-<script src="pdrd-marks.js?v=1.2.0"></script>
-<script src="pdrd-refs-v25.js?v=1.2.0"></script>
-<script src="pdrd-calc.js?v=1.2.0"></script>
-<script src="pdrd-design.js?v=1.2.0"></script>
-<script src="pdrd-decide.js?v=1.2.0"></script>
-<script src="pdrd-spec.js?v=1.2.0"></script>
-<script src="pdrd-texts.js?v=1.2.0"></script>
-<script src="pdrd-docx.js?v=1.2.0"></script>
-<script src="pdrd-svg.js?v=1.2.0"></script>
-<script src="pdrd-dxf.js?v=1.2.0"></script>
-<script src="pdrd-media.js?v=1.2.0"></script>
-<script src="pdrd-map.js?v=1.2.0"></script>
-<script src="pdrd-pdf.js?v=1.2.0"></script>
+<script src="pdrd-core.js?v=1.3.0"></script>
+<script src="pdrd-norms.js?v=1.3.0"></script>
+<script src="pdrd-profiles.js?v=1.3.0"></script>
+<script src="pdrd-marks.js?v=1.3.0"></script>
+<script src="pdrd-refs-v25.js?v=1.3.0"></script>
+<script src="pdrd-calc.js?v=1.3.0"></script>
+<script src="pdrd-design.js?v=1.3.0"></script>
+<script src="pdrd-decide.js?v=1.3.0"></script>
+<script src="pdrd-spec.js?v=1.3.0"></script>
+<script src="pdrd-texts.js?v=1.3.0"></script>
+<script src="pdrd-docx.js?v=1.3.0"></script>
+<script src="pdrd-svg.js?v=1.3.0"></script>
+<script src="pdrd-dxf.js?v=1.3.0"></script>
+<script src="pdrd-media.js?v=1.3.0"></script>
+<script src="pdrd-map.js?v=1.3.0"></script>
+<script src="pdrd-pdf.js?v=1.3.0"></script>
 <script>
 (function(){
   var $ = function(id){ return document.getElementById(id); };
@@ -154,12 +154,13 @@
     msg('warn','Загрузка карты…');
     PDRD_MAP.tiles(bbox, { source: $('mapSrc').value, url: $('mapUrl').value.trim(), maxZoom: isFinite(z) ? z : 18 })
       .then(function(r){
-        return PDRD_MEDIA.saveUnderlayData(d, r.dataUrl, r.name, r.nw, r.se, { attr: r.attr, source: r.source, zoom: r.zoom })
+        return PDRD_MEDIA.saveUnderlayData(d, r.dataUrl, r.name, r.nw, r.se, { attr: r.attr, source: r.source, zoom: r.zoom, mode: r.mode, tiles: r.tiles })
           .then(function(){
             PDRD.replaceAll(d); d = PDRD.load();
             return PDRD_MEDIA.loadUnderlay(d).then(function(){
               PDRD_SVG.reset(d);
-              msg('ok','Карта загружена: ' + r.tiles + ' тайлов, уровень ' + r.zoom + (r.failed ? ', не загружено ' + r.failed : '') + '. Постройте листы заново.');
+              msg(r.mode === 'image' ? 'ok' : 'warn', 'Карта загружена: ' + r.count + ' тайлов, уровень ' + r.zoom + (r.failed ? ', не загружено ' + r.failed : '') +
+                (r.mode === 'image' ? '. Подложка войдёт в просмотр, печать, PDF и архив DXF.' : '. Сервис не разрешает чтение пикселей: подложка будет видна в просмотре и при печати, но не войдёт в PDF из программы и в DXF.') + ' Постройте листы заново.');
               UF.forEach(function(f){ var v = { nwLat:r.nw.lat, nwLon:r.nw.lon, seLat:r.se.lat, seLon:r.se.lon }[f[0]]; undVals[f[0]] = v; $('u_' + f[0]).value = String(v.toFixed(6)).replace('.', ','); });
             });
           });
@@ -204,17 +205,22 @@
       }
     });
     z.file('Podlozhka_README.txt', '\ufeffРастровая подложка в DXF подключается как внешняя ссылка: команда «Вставка растрового изображения» (IMAGEATTACH), файл <имя листа>.jpg рядом с DXF; файл привязки <имя листа>.jgw задаёт положение и масштаб в координатах листа (мм). Источник карты указан в примечаниях листа.\r\n');
-    z.generateAsync({ type:'blob', compression:'DEFLATE' }).then(function(b){ save(b, (d.passport.shifr || 'PD_RD').replace(/[^\w\-]+/g,'_') + '-LKS-DXF.zip', 'application/zip'); msg('ok','DXF: ' + list.length + ' файлов.'); });
+    var remote = list.some(function(sh){ return PDRD_MAP.hasRemote(sh); });
+    z.generateAsync({ type:'blob', compression:'DEFLATE' }).then(function(b){
+      save(b, (d.passport.shifr || 'PD_RD').replace(/[^\w\-]+/g,'_') + '-LKS-DXF.zip', 'application/zip');
+      msg(remote ? 'warn' : 'ok', 'DXF: ' + list.length + ' файлов.' + (remote ? ' Карта выбранного сервиса в архив не вошла — используйте OpenStreetMap или своё изображение.' : ''));
+    });
   };
   $('bPdf').onclick = function(){
     msg('warn','Формирование PDF (загрузка шрифта при первом запуске)…');
     PDRD_PDF.render(list, { title: d.passport.object }).then(function(buf){
       save(buf, (d.passport.shifr || 'PD_RD').replace(/[^\w\-]+/g,'_') + '-LKS.pdf', 'application/pdf');
-      msg('ok','PDF сформирован: ' + list.length + ' листов А3.');
+      var remote2 = list.some(function(sh){ return PDRD_MAP.hasRemote(sh); });
+      msg(remote2 ? 'warn' : 'ok','PDF сформирован: ' + list.length + ' листов А3.' + (remote2 ? ' Карта выбранного сервиса в PDF не вошла — используйте «Печать → Сохранить как PDF», OpenStreetMap или своё изображение.' : ''));
     }).catch(function(e){ msg('bad','PDF не сформирован: ' + e.message + '. Используйте «Печать» → «Сохранить как PDF».'); });
   };
 })();
 </script>
-<script src="pdrd-nav.js?v=1.2.0"></script>
+<script src="pdrd-nav.js?v=1.3.0"></script>
 </body>
 </html>

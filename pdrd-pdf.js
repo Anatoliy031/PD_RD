@@ -20,6 +20,7 @@ function render(sheets, opt) {
     var J = global.jspdf && global.jspdf.jsPDF;
     if (!J) throw new Error('библиотека jsPDF не загружена');
     var doc = new J({ orientation: 'landscape', unit: 'mm', format: 'a3', compress: true });
+    var remote = 0;
     doc.addFileToVFS('DejaVuSansCondensed.ttf', font);
     doc.addFont('DejaVuSansCondensed.ttf', 'DejaVu', 'normal');
     doc.setFont('DejaVu', 'normal');
@@ -39,6 +40,7 @@ function render(sheets, opt) {
           doc.setLineWidth(0.25);
           if (e.fill) { doc.setFillColor(c[0], c[1], c[2]); doc.circle(e.cx, e.cy, e.r, 'F'); } else doc.circle(e.cx, e.cy, e.r, 'S');
         } else if (e.t === 'image') {
+          if (e.remote || !e.href) { remote++; return; }   /* ссылки на тайлы в PDF не вкладываются */
           try { doc.addImage(e.href, e.x, e.y, e.w, e.h, undefined, 'FAST'); } catch (err) { if (global.console) console.warn('подложка не добавлена в PDF', err); }
         } else if (e.t === 'text') {
           if (e.wm) doc.setTextColor(227, 168, 168); else doc.setTextColor(c[0], c[1], c[2]);
@@ -48,6 +50,7 @@ function render(sheets, opt) {
       });
     });
     doc.setProperties({ title: opt.title || 'Чертежи', creator: 'PD_RD ' + (global.PDRD ? global.PDRD.VERSION : '') });
+    doc.__remoteImages = remote;
     return doc.output('arraybuffer');
   });
 }

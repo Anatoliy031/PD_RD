@@ -44,7 +44,7 @@ Sheet.prototype.text = function (x, y, s, h, opt) {
   this.p.push({ t: 'text', x: x, y: y, s: String(s), h: h, a: opt.a || 'start', rot: opt.rot || 0, l: opt.l || 'ТЕКСТ', b: !!opt.b, wm: !!opt.wm });
   return this;
 };
-Sheet.prototype.image = function (x, y, w, h, href, rot, clip) { this.p.push({ t: 'image', x: x, y: y, w: w, h: h, href: href, rot: rot || 0, clip: clip || null, l: 'ПОДЛОЖКА' }); return this; };
+Sheet.prototype.image = function (x, y, w, h, href, rot, clip, remote) { this.p.push({ t: 'image', x: x, y: y, w: w, h: h, href: href, rot: rot || 0, clip: clip || null, remote: !!remote, l: 'ПОДЛОЖКА' }); return this; };
 Sheet.prototype.note = function (s) { this.notes.push(String(s)); return this; };
 
 /* Рабочее поле листа: над основной надписью, с учётом блока примечаний */
@@ -244,7 +244,8 @@ function planSheets(d) {
   var segs = segments(d);
   var pts = d.poles.filter(function (p) { return p.coords && p.coords.lat !== null; });
   if (!pts.length) return [];
-  var und = d.mapUnderlay && d.mapUnderlay.dataUrl && d.mapUnderlay.nw && d.mapUnderlay.se ? d.mapUnderlay : null;
+  var u0 = d.mapUnderlay;
+  var und = u0 && u0.nw && u0.se && (u0.dataUrl || (u0.tiles && u0.tiles.length)) ? u0 : null;
   var out = [];
   var Z = { x0: FL + 5, y0: FO + 5, x1: W - FO - 5, y1: H - FO - STAMP_H - 30 };
 
@@ -277,15 +278,27 @@ function planSheets(d) {
     function P(p) { return XYm(pr.x(p.coords.lon), pr.y(p.coords.lat)); }
     function inside(q) { return q[0] >= Z.x0 - 2 && q[0] <= Z.x1 + 2 && q[1] >= Z.y0 - 2 && q[1] <= Z.y1 + 2; }
     if (und) {
-      /* прямоугольник подложки: углы пересчитываются в координаты листа,
-         при развороте плана растр помечается углом поворота (выпрямляется позже) */
-      var nwP = XYm(pr.x(und.nw.lon), pr.y(und.nw.lat)), seP = XYm(pr.x(und.se.lon), pr.y(und.se.lat));
-      var neP = XYm(pr.x(und.se.lon), pr.y(und.nw.lat)), swP = XYm(pr.x(und.nw.lon), pr.y(und.se.lat));
-      var wIm = Math.hypot(neP[0] - nwP[0], neP[1] - nwP[1]);
-      var hIm = Math.hypot(swP[0] - nwP[0], swP[1] - nwP[1]);
-      var ccx = (nwP[0] + seP[0]) / 2, ccy = (nwP[1] + seP[1]) / 2;
-      if (wIm > 1 && hIm > 1) sh.image(ccx - wIm / 2, ccy - hIm / 2, wIm, hIm, und.dataUrl, -rot * 180 / Math.PI, { x0: Z.x0, y0: Z.y0, x1: Z.x1, y1: Z.y1 });
+      /* Подложка: либо склеенный растр, либо набор тайлов-ссылок.
+         Углы каждого прямоугольника пересчитываются в координаты листа;
+         при развороте плана растр помечается углом поворота. */
+      var clipRect = { x0: Z.x0, y0: Z.y0, x1: Z.x1, y1: Z.y1 };
+      var parts = und.mode === 'tiles' && und.tiles && und.tiles.length
+        ? und.tiles.map(function (tl2) { return { nw: tl2.nw, se: tl2.se, href: tl2.url, remote: true }; })
+        : (und.dataUrl ? [{ nw: und.nw, se: und.se, href: und.dataUrl, remote: false }] : []);
+      parts.forEach(function (im) {
+        var nwP = XYm(pr.x(im.nw.lon), pr.y(im.nw.lat)), seP = XYm(pr.x(im.se.lon), pr.y(im.se.lat));
+        var neP = XYm(pr.x(im.se.lon), pr.y(im.nw.lat)), swP = XYm(pr.x(im.nw.lon), pr.y(im.se.lat));
+        var wIm = Math.hypot(neP[0] - nwP[0], neP[1] - nwP[1]) + (im.remote ? 0.05 : 0);
+        var hIm = Math.hypot(swP[0] - nwP[0], swP[1] - nwP[1]) + (im.remote ? 0.05 : 0);
+        var ccx = (nwP[0] + seP[0]) / 2, ccy = (nwP[1] + seP[1]) / 2;
+        if (!(wIm > 0.2 && hIm > 0.2)) return;
+        /* тайлы за пределами рабочего поля не выводим */
+        var half = Math.max(wIm, hIm) / 2 * (rot ? 1.5 : 1);
+        if (ccx + half < Z.x0 || ccx - half > Z.x1 || ccy + half < Z.y0 || ccy - half > Z.y1) return;
+        sh.image(ccx - wIm / 2, ccy - hIm / 2, wIm, hIm, im.href, -rot * 180 / Math.PI, clipRect, im.remote);
+      });
       if (und.attr) sh.note('Картографическая основа: ' + und.attr + '.');
+      if (und.mode === 'tiles') sh.note('Карта выводится ссылками на тайлы сервиса: видна в просмотре и при печати (в том числе «Печать → Сохранить как PDF»); в PDF из программы и в архив DXF не попадает — для этого используйте источник, разрешающий чтение изображений (например, OpenStreetMap), или загрузите своё изображение.');
     }
     var inv = rotator(-rot), ctr = inv(cx, cy);
     grid(sh, Z, pr, XYm, sc, ctr);
