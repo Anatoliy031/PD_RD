@@ -20,6 +20,12 @@ function num(v) { var n = typeof v === 'number' ? v : parseFloat(String(v === un
 function fm(v, d) { if (v === null || v === undefined || !isFinite(v)) return '—'; var k = Math.pow(10, d === undefined ? 1 : d); return String(Math.round(v * k) / k).replace('.', ','); }
 /* Ширина строки для узкого шрифта, мм */
 function tw(s, h) { return String(s).length * h * 0.6; }
+/* В основной надписи печатается только фамилия: «Е.В. Куличкин» → «Куличкин» */
+function surname(fio) {
+  var parts = String(fio || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  var fam = parts.filter(function (w) { return !/^[А-ЯЁA-Z]\.?[А-ЯЁA-Z]?\.?$/.test(w); });
+  return (fam[0] || parts[0] || '').replace(/,$/, '');
+}
 function clip(s, maxMm, h) {
   s = String(s === null || s === undefined ? '' : s);
   var n = Math.max(1, Math.floor(maxMm / (h * 0.6)));
@@ -38,7 +44,7 @@ Sheet.prototype.text = function (x, y, s, h, opt) {
   this.p.push({ t: 'text', x: x, y: y, s: String(s), h: h, a: opt.a || 'start', rot: opt.rot || 0, l: opt.l || 'ТЕКСТ', b: !!opt.b, wm: !!opt.wm });
   return this;
 };
-Sheet.prototype.image = function (x, y, w, h, href) { this.p.push({ t: 'image', x: x, y: y, w: w, h: h, href: href, l: 'ПОДЛОЖКА' }); return this; };
+Sheet.prototype.image = function (x, y, w, h, href, rot, clip) { this.p.push({ t: 'image', x: x, y: y, w: w, h: h, href: href, rot: rot || 0, clip: clip || null, l: 'ПОДЛОЖКА' }); return this; };
 Sheet.prototype.note = function (s) { this.notes.push(String(s)); return this; };
 
 /* Рабочее поле листа: над основной надписью, с учётом блока примечаний */
@@ -120,7 +126,8 @@ function frame(sh, info) {
     var xx = x + cols.slice(0, i).reduce(function (a, b) { return a + b; }, 0) + cols[i] / 2;
     sh.text(xx, y + 29, t, FS.stampSmall, { a: 'middle', l: L, max: cols[i] - 0.5 });
   });
-  var roles = [['Разраб.', info.razrab], ['Пров.', info.prov], ['Утв.', info.approver], ['Н. контр.', info.nkontr], ['ГИП', info.gip]];
+  var roles = [['Разраб.', surname(info.razrab)], ['Пров.', surname(info.prov)], ['Утв.', surname(info.approver)],
+               ['Н. контр.', surname(info.nkontr)], ['ГИП', surname(info.gip)]];
   roles.forEach(function (r, i) {
     sh.text(x + 1, y + 33.6 + 5 * i, r[0], FS.stampSmall, { l: L, max: 19 });
     sh.text(x + 21, y + 33.6 + 5 * i, r[1] || '', FS.stampSmall, { l: L, max: 19 });
@@ -194,17 +201,17 @@ function segments(d) {
 function onRoute(p) { return ['place', 'recheck', 'extra', 'after'].indexOf((p.design || {}).decision) >= 0; }
 function poleNums(p) { return (p.lines || []).map(function (l) { return l.num; }).join('/'); }
 
-/* Условное обозначение опоры по схеме (с подкосом у анкерных) */
+/* Условное обозначение опоры: промежуточная — стойка; анкерная, угловая
+   анкерная и ответвительная — стойка с двумя подкосами; концевая — с одним
+   подкосом со стороны, противоположной тяжению. Подкосы всегда идут вниз. */
 function poleSymbol(sh, x, yTop, yBase, scheme, layer) {
   layer = layer || 'ВЛ_ОПОРЫ';
   var hgt = yBase - yTop, s = String(scheme || '');
   sh.line(x, yTop, x, yBase, layer, 0.6);
-  var d = hgt * 0.45;
-  if (/концев/.test(s)) { sh.line(x, yTop + hgt * 0.25, x - d, yBase, layer, 0.5); }
-  else if (/ответвит/.test(s)) { sh.line(x, yTop + hgt * 0.25, x - d, yBase, layer, 0.5); sh.line(x, yTop + hgt * 0.35, x + d * 0.8, yTop + hgt * 0.1, layer, 0.5); }
-  else if (/углов/.test(s) && /анкер/.test(s)) { sh.line(x, yTop + hgt * 0.25, x - d, yBase, layer, 0.5); sh.line(x, yTop + hgt * 0.25, x + d, yBase, layer, 0.5); }
-  else if (/анкер/.test(s)) { sh.line(x, yTop + hgt * 0.25, x - d, yBase, layer, 0.5); sh.line(x, yTop + hgt * 0.25, x + d, yBase, layer, 0.5); }
-  else if (/углов/.test(s)) { sh.line(x - d * 0.6, yTop + hgt * 0.15, x + d * 0.6, yTop + hgt * 0.15, layer, 0.4); }
+  var d = hgt * 0.42, top = yTop + hgt * 0.28;
+  if (/концев/.test(s)) sh.line(x, top, x - d, yBase, layer, 0.5);
+  else if (/анкер|ответвит/.test(s)) { sh.line(x, top, x - d, yBase, layer, 0.5); sh.line(x, top, x + d, yBase, layer, 0.5); }
+  else if (/углов/.test(s)) sh.line(x - d * 0.6, yTop + hgt * 0.16, x + d * 0.6, yTop + hgt * 0.16, layer, 0.4);
   sh.line(x - hgt * 0.18, yBase, x + hgt * 0.18, yBase, layer, 0.5);
 }
 function schemeOf(p) { var R = global.PDRD_REFS_V25, ref = R ? R.poleByMark(p.mark) : null; return ref ? ref.sch : ''; }
@@ -270,8 +277,15 @@ function planSheets(d) {
     function P(p) { return XYm(pr.x(p.coords.lon), pr.y(p.coords.lat)); }
     function inside(q) { return q[0] >= Z.x0 - 2 && q[0] <= Z.x1 + 2 && q[1] >= Z.y0 - 2 && q[1] <= Z.y1 + 2; }
     if (und) {
-      var a1 = XYm(pr.x(und.nw.lon), pr.y(und.nw.lat)), a2 = XYm(pr.x(und.se.lon), pr.y(und.se.lat));
-      if (!rot && a2[0] > a1[0] && a2[1] > a1[1]) sh.image(a1[0], a1[1], a2[0] - a1[0], a2[1] - a1[1], und.dataUrl);
+      /* прямоугольник подложки: углы пересчитываются в координаты листа,
+         при развороте плана растр помечается углом поворота (выпрямляется позже) */
+      var nwP = XYm(pr.x(und.nw.lon), pr.y(und.nw.lat)), seP = XYm(pr.x(und.se.lon), pr.y(und.se.lat));
+      var neP = XYm(pr.x(und.se.lon), pr.y(und.nw.lat)), swP = XYm(pr.x(und.nw.lon), pr.y(und.se.lat));
+      var wIm = Math.hypot(neP[0] - nwP[0], neP[1] - nwP[1]);
+      var hIm = Math.hypot(swP[0] - nwP[0], swP[1] - nwP[1]);
+      var ccx = (nwP[0] + seP[0]) / 2, ccy = (nwP[1] + seP[1]) / 2;
+      if (wIm > 1 && hIm > 1) sh.image(ccx - wIm / 2, ccy - hIm / 2, wIm, hIm, und.dataUrl, -rot * 180 / Math.PI, { x0: Z.x0, y0: Z.y0, x1: Z.x1, y1: Z.y1 });
+      if (und.attr) sh.note('Картографическая основа: ' + und.attr + '.');
     }
     var inv = rotator(-rot), ctr = inv(cx, cy);
     grid(sh, Z, pr, XYm, sc, ctr);
@@ -286,13 +300,34 @@ function planSheets(d) {
       sh.line(cl[0][0], cl[0][1], cl[1][0], cl[1][1], on ? 'ВОЛС' : 'ВЛ_ПРОВОДА', on ? 0.8 : 0.3);
     });
     var labels = items.length <= 90;
+    /* соседние опоры — чтобы подписи ставить в стороне от линии трассы */
+    var nb = {};
+    segs.forEach(function (g) {
+      if (!g.a.coords || !g.b.coords || g.a.coords.lat === null || g.b.coords.lat === null) return;
+      (nb[g.a.id] = nb[g.a.id] || []).push(g.b);
+      (nb[g.b.id] = nb[g.b.id] || []).push(g.a);
+    });
     items.forEach(function (p) {
       var q = P(p); if (!inside(q)) return;
       var x = p.design || {};
       if (x.sleeve) sh.poly([[q[0], q[1] - 2.2], [q[0] - 1.9, q[1] + 1.1], [q[0] + 1.9, q[1] + 1.1]], true, 'МУФТЫ', 0.4);
       else if (['after', 'bypass', 'exclude'].indexOf(x.decision) >= 0) sh.circle(q[0], q[1], 1.4, 'МУФТЫ', false);
       else sh.circle(q[0], q[1], labels ? 0.9 : 0.5, 'ВЛ_ОПОРЫ', true);
-      if (labels && q[0] < Z.x1 - 12) sh.text(q[0] + 1.6, q[1] - 1.2, poleNums(p), FS.small, { l: 'ТЕКСТ', max: 20 });
+      if (!labels) return;
+      var dx = 0, dy = 0;
+      (nb[p.id] || []).forEach(function (o) { var r = P(o), l = Math.hypot(r[0] - q[0], r[1] - q[1]) || 1; dx += (r[0] - q[0]) / l; dy += (r[1] - q[1]) / l; });
+      var ln = Math.hypot(dx, dy), nx, ny;
+      if (ln > 0.35) { nx = -dx / ln; ny = -dy / ln; }            /* угловая опора — наружу угла */
+      else {
+        var o1 = (nb[p.id] || [])[0];
+        if (o1) { var r1 = P(o1), l1 = Math.hypot(r1[0] - q[0], r1[1] - q[1]) || 1; nx = -(r1[1] - q[1]) / l1; ny = (r1[0] - q[0]) / l1; }
+        else { nx = 0.7; ny = -0.7; }
+      }
+      var off = 4, s2 = poleNums(p), wl = tw(s2, FS.small);
+      var lx = q[0] + nx * off, ly = q[1] + ny * off + FS.small * 0.35;
+      lx = Math.min(Math.max(lx, Z.x0 + wl / 2 + 0.5), Z.x1 - wl / 2 - 0.5);
+      ly = Math.min(Math.max(ly, Z.y0 + FS.small), Z.y1 - 0.5);
+      sh.text(lx, ly, s2, FS.small, { a: 'middle', l: 'ТЕКСТ', max: 24 });
     });
     northArrow(sh, Z.x1 - 12, Z.y0 + 5, rot);
     scaleBar(sh, Z.x1 - 62, Z.y1 - 3, sc);
@@ -310,7 +345,7 @@ function planSheets(d) {
     if (rot) sh.note('План развёрнут для размещения трассы вдоль листа: направление на север — по стрелке.');
     sh.note('Условные обозначения: тонкая линия — существующая ВЛ; утолщённая — проектируемая ВОЛС; точка — опора ВЛ; треугольник — муфта и запас кабеля; окружность — опора, исключённая из размещения или с размещением после восстановления владельцем.');
     if (Math.max(f.w, f.h) < FILL_MIN) sh.note('Заполнение листа ограничено принятым стандартным масштабом ' + 'М 1:' + sc + ' и конфигурацией участка трассы.');
-    sh.note(und ? ('Подложка: ' + (und.name || 'растровая подложка') + ', привязана по углам (в DXF не выгружается).')
+    sh.note(und ? ('Подложка: ' + (und.name || 'растровая подложка') + ', привязана по координатам углов; в архив DXF прикладываются растр и файл привязки .wld для подключения в САПР.')
                 : 'Растровая подложка не задана (страница «Чертежи» → «Подложка»). Трасса дополнительно передаётся файлом KMZ для просмотра на картографической основе.');
   }
 
@@ -557,10 +592,13 @@ function layoutSheets(d) {
       sh.rect(x - 1.8, base - standH * sc, 3.6, standH * sc, 'ВЛ_ОПОРЫ', 0.6);
       /* подкосы и оттяжки анкерных, концевых, угловых и ответвительных опор */
       if (/анкер|концев|ответвит/.test(sch)) {
-        var top = base - standH * sc * 0.72;
-        sh.line(x - 1.8, top, x - standH * sc * 0.42, base, 'ВЛ_ОПОРЫ', 0.6);
-        sh.text(x - standH * sc * 0.42, base + 4, 'подкос', FS.small, { a: 'middle' });
-        if (/углов/.test(sch) || /ответвит/.test(sch)) sh.line(x + 1.8, top, x + standH * sc * 0.42, base, 'ВЛ_ОПОРЫ', 0.6);
+        var top = base - standH * sc * 0.72, arm = standH * sc * 0.42;
+        sh.line(x - 1.8, top, x - arm, base, 'ВЛ_ОПОРЫ', 0.6);
+        sh.text(x - arm, base + 4, 'подкос', FS.small, { a: 'middle' });
+        if (!/концев/.test(sch)) {
+          sh.line(x + 1.8, top, x + arm, base, 'ВЛ_ОПОРЫ', 0.6);
+          sh.text(x + arm, base + 4, 'подкос', FS.small, { a: 'middle' });
+        }
       }
       var wires = [];
       (p.fromReport || []).forEach(function (r) { ((d.wiresByKv || {})[String(r.kv).replace('.', ',')] || []).forEach(function (w) { wires.push({ w: w, kv: r.kv }); }); });
@@ -850,12 +888,26 @@ function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').
 function toSvg(sh) {
   var o = ['<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + 'mm" height="' + H + 'mm" font-family="Arial Narrow, Arial, sans-serif">',
            '<rect width="' + W + '" height="' + H + '" fill="#fff"/>'];
+  var clips = sh.p.filter(function (e) { return e.t === 'image' && e.clip; });
+  if (clips.length) {
+    o.push('<defs>');
+    clips.forEach(function (e, i) {
+      e._cid = 'clip' + i;
+      o.push('<clipPath id="' + e._cid + '"><rect x="' + e.clip.x0 + '" y="' + e.clip.y0 + '" width="' + (e.clip.x1 - e.clip.x0) + '" height="' + (e.clip.y1 - e.clip.y0) + '"/></clipPath>');
+    });
+    o.push('</defs>');
+  }
   sh.p.forEach(function (e) {
     var c = COLORS[e.l] || '#000';
     if (e.t === 'line') o.push('<line x1="' + e.x1.toFixed(2) + '" y1="' + e.y1.toFixed(2) + '" x2="' + e.x2.toFixed(2) + '" y2="' + e.y2.toFixed(2) + '" stroke="' + c + '" stroke-width="' + e.w.toFixed(2) + '"' + (e.dash ? ' stroke-dasharray="2 1.5"' : '') + '/>');
     else if (e.t === 'poly') o.push('<' + (e.c ? 'polygon' : 'polyline') + ' points="' + e.pts.map(function (p) { return p[0].toFixed(2) + ',' + p[1].toFixed(2); }).join(' ') + '" fill="none" stroke="' + c + '" stroke-width="' + e.w.toFixed(2) + '"' + (e.dash ? ' stroke-dasharray="2 1.5"' : '') + '/>');
     else if (e.t === 'circle') o.push('<circle cx="' + e.cx.toFixed(2) + '" cy="' + e.cy.toFixed(2) + '" r="' + e.r.toFixed(2) + '" fill="' + (e.fill ? c : 'none') + '" stroke="' + c + '" stroke-width="0.25"/>');
-    else if (e.t === 'image') o.push('<image x="' + e.x.toFixed(2) + '" y="' + e.y.toFixed(2) + '" width="' + e.w.toFixed(2) + '" height="' + e.h.toFixed(2) + '" preserveAspectRatio="none" opacity="0.85" xlink:href="' + e.href + '"/>');
+    else if (e.t === 'image') {
+      var cx2 = e.x + e.w / 2, cy2 = e.y + e.h / 2;
+      o.push('<image x="' + e.x.toFixed(2) + '" y="' + e.y.toFixed(2) + '" width="' + e.w.toFixed(2) + '" height="' + e.h.toFixed(2) + '" preserveAspectRatio="none" opacity="0.9"' +
+        (e._cid ? ' clip-path="url(#' + e._cid + ')"' : '') +
+        (e.rot ? ' transform="rotate(' + e.rot.toFixed(3) + ' ' + cx2.toFixed(2) + ' ' + cy2.toFixed(2) + ')"' : '') + ' xlink:href="' + e.href + '"/>');
+    }
     else if (e.t === 'text') o.push('<text x="' + e.x.toFixed(2) + '" y="' + e.y.toFixed(2) + '" font-size="' + e.h.toFixed(2) + '" text-anchor="' + e.a + '"' + (e.b ? ' font-weight="700"' : '') + ' fill="' + (e.wm ? '#e3a8a8' : c) + '"' + (e.rot ? ' transform="rotate(' + e.rot + ' ' + e.x.toFixed(2) + ' ' + e.y.toFixed(2) + ')"' : '') + (e.wm ? ' opacity="0.6"' : '') + '>' + esc(e.s) + '</text>');
   });
   o.push('</svg>');
@@ -863,5 +915,5 @@ function toSvg(sh) {
 }
 
 global.PDRD_SVG = { reset: reset, W: W, H: H, LAYERS: LAYERS, FS: FS, Sheet: Sheet, sheets: sheets, sheetList: sheetList,
-  toSvg: toSvg, ekus: ekus, segments: segments, fitSheet: fitSheet, bbox: bbox, zone: zone, projection: projection };
+  toSvg: toSvg, ekus: ekus, segments: segments, poleSymbol: poleSymbol, surname: surname, fitSheet: fitSheet, bbox: bbox, zone: zone, projection: projection };
 })(typeof window !== 'undefined' ? window : globalThis);

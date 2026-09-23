@@ -638,6 +638,60 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     sh.forEach(function(s){ if ((s.meta.fill || 0) < 70) throw new Error('лист ' + s.meta.num + ': заполнение ' + s.meta.fill + ' %'); });
     return sh.length + ' листов ≥ 70 %';
   });
+  t('Штамп: только фамилии подписантов', function(){
+    var sh = PDRD_SVG.sheets(demo)[0];
+    var st = sh.p.filter(function(e){ return e.l === 'ШТАМП' && e.t === 'text'; }).map(function(e){ return e.s; });
+    eq(st.indexOf('Куличкин') >= 0, true, 'ГИП'); eq(st.indexOf('Чепусов') >= 0, true, 'утверждающий');
+    eq(st.some(function(s){ return /Е\.В\.|И\.И\.|А\.В\./.test(s); }), false, 'инициалов нет');
+    eq(st.some(function(s){ return /…/.test(s); }), false, 'ничего не обрезано');
+    return 'фамилии';
+  });
+  t('Подписи опор на плане не лежат на линии трассы', function(){
+    var pl = PDRD_SVG.sheets(demo).filter(function(s){ return s.meta.kind === 'plan'; })[0];
+    var lines = pl.p.filter(function(e){ return e.t === 'line' && (e.l === 'ВОЛС' || e.l === 'ВЛ_ПРОВОДА'); });
+    var labels = pl.p.filter(function(e){ return e.t === 'text' && /^[\d\-\/]+$/.test(e.s); });
+    eq(labels.length > 0, true, 'подписи есть');
+    labels.forEach(function(e){
+      lines.forEach(function(l){
+        var vx = l.x2 - l.x1, vy = l.y2 - l.y1, L2 = vx * vx + vy * vy;
+        var tx = e.x - l.x1, ty = e.y - 0.9 - l.y1;
+        var u = L2 ? Math.max(0, Math.min(1, (tx * vx + ty * vy) / L2)) : 0;
+        var dx = tx - u * vx, dy = ty - u * vy;
+        if (Math.sqrt(dx * dx + dy * dy) < 1.2) throw new Error('подпись ' + e.s + ' на линии');
+      });
+    });
+    return labels.length + ' подписей в стороне от линии';
+  });
+  t('Условные обозначения опор: подкосы вниз, анкерная — два, концевая — один', function(){
+    var SV = PDRD_SVG, sh = new SV.Sheet({});
+    function braces(scheme){
+      var s2 = new SV.Sheet({});
+      var before = s2.p.length;
+      SV.poleSymbol(s2, 50, 10, 40, scheme);
+      return s2.p.filter(function(e){ return e.t === 'line' && Math.abs(e.x2 - e.x1) > 1 && Math.abs(e.y2 - e.y1) > 1; });
+    }
+    var ank = braces('анкерная'), konc = braces('концевая'), otv = braces('ответвительная'), prom = braces('промежуточная');
+    eq(ank.length, 2, 'анкерная'); eq(konc.length, 1, 'концевая'); eq(otv.length, 2, 'ответвительная'); eq(prom.length, 0, 'промежуточная');
+    [].concat(ank, konc, otv).forEach(function(e){ if (!(e.y2 > e.y1)) throw new Error('подкос направлен вверх'); });
+    return 'проверено';
+  });
+  t('Подложка: файл привязки .wld соответствует размещению растра', function(){
+    var e = { x: 30, y: 20, w: 200, h: 100, pxW: 2000, pxH: 1000 };
+    var w = PDRD_MAP.worldFile(e, 297, e.pxW, e.pxH).split(/\r?\n/).map(Number);
+    near(w[0], 0.1, 1e-9, 'размер пикселя по X'); near(w[3], -0.1, 1e-9, 'по Y');
+    near(w[4], 30.05, 1e-9, 'X центра первого пикселя');
+    near(w[5], 277 - 0.05, 1e-9, 'Y центра первого пикселя');
+    return 'привязка верна';
+  });
+  t('Карта: выбор масштабного уровня и рамка трассы', function(){
+    var bb = PDRD_MAP.routeBbox(demo);
+    eq(bb.n > bb.s && bb.e > bb.w, true, 'рамка');
+    var z = 18, x0 = PDRD_MAP.lon2x(bb.w, z), x1 = PDRD_MAP.lon2x(bb.e, z);
+    eq(x1 > x0, true, 'тайловые координаты');
+    near(PDRD_MAP.x2lon(PDRD_MAP.lon2x(39.1, 15), 15), 39.1, 1e-6, 'обратное преобразование');
+    near(PDRD_MAP.y2lat(PDRD_MAP.lat2y(45.3, 15), 15), 45.3, 1e-6, 'широта');
+    return 'преобразования верны';
+  });
   t('Чертежи: анкерные опоры показаны с подкосами', function(){
     var route = PDRD_SVG.sheets(demo).filter(function(s){ return s.meta.kind === 'route'; })[0];
     eq(!!route, true, 'лист размещения');

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Чертежи — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.1.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.2.0">
 <style>
 .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 14px}
 .frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
@@ -50,8 +50,26 @@
     <h2>Подложка ситуационного плана</h2>
     <p class="sub">Растровая подложка (снимок или выкопировка) привязывается по координатам северо-западного и юго-восточного углов изображения — как в Google Earth: «Добавить» → «Наложение изображения» → вкладка «Местоположение». Подложка хранится в этом браузере и в файл проекта не входит; в DXF не выгружается.</p>
     <div class="frm" id="und"></div>
+    <div class="frm" style="margin-top:10px">
+      <div>
+        <label for="mapSrc">Источник карты</label>
+        <select id="mapSrc" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:15px"></select>
+        <div class="hint">Карта скачивается из выбранного источника и сохраняется в браузере; ссылка на источник печатается в примечаниях листа.</div>
+      </div>
+      <div>
+        <label for="mapUrl">Адрес тайлов (для своего источника)</label>
+        <input id="mapUrl" placeholder="https://сервер/{z}/{x}/{y}.png">
+        <div class="hint">Например, корпоративный картографический сервис.</div>
+      </div>
+      <div>
+        <label for="mapZoom">Детальность (масштабный уровень)</label>
+        <input id="mapZoom" inputmode="numeric" placeholder="18">
+        <div class="hint">16 — квартал, 18 — дома и подписи улиц. Ограничивается размером трассы.</div>
+      </div>
+    </div>
     <div class="btns">
-      <label class="btn" for="fUnd">Выбрать изображение</label>
+      <button class="btn primary" id="bMap" type="button">Загрузить карту по трассе</button>
+      <label class="btn" for="fUnd">Своё изображение</label>
       <input type="file" id="fUnd" accept="image/png,image/jpeg,image/webp" hidden>
       <button class="btn" id="bUndBox" type="button">Подставить углы по трассе</button>
       <button class="btn danger" id="bUndDel" type="button">Убрать подложку</button>
@@ -63,21 +81,22 @@
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="pdrd-core.js?v=1.1.0"></script>
-<script src="pdrd-norms.js?v=1.1.0"></script>
-<script src="pdrd-profiles.js?v=1.1.0"></script>
-<script src="pdrd-marks.js?v=1.1.0"></script>
-<script src="pdrd-refs-v25.js?v=1.1.0"></script>
-<script src="pdrd-calc.js?v=1.1.0"></script>
-<script src="pdrd-design.js?v=1.1.0"></script>
-<script src="pdrd-decide.js?v=1.1.0"></script>
-<script src="pdrd-spec.js?v=1.1.0"></script>
-<script src="pdrd-texts.js?v=1.1.0"></script>
-<script src="pdrd-docx.js?v=1.1.0"></script>
-<script src="pdrd-svg.js?v=1.1.0"></script>
-<script src="pdrd-dxf.js?v=1.1.0"></script>
-<script src="pdrd-media.js?v=1.1.0"></script>
-<script src="pdrd-pdf.js?v=1.1.0"></script>
+<script src="pdrd-core.js?v=1.2.0"></script>
+<script src="pdrd-norms.js?v=1.2.0"></script>
+<script src="pdrd-profiles.js?v=1.2.0"></script>
+<script src="pdrd-marks.js?v=1.2.0"></script>
+<script src="pdrd-refs-v25.js?v=1.2.0"></script>
+<script src="pdrd-calc.js?v=1.2.0"></script>
+<script src="pdrd-design.js?v=1.2.0"></script>
+<script src="pdrd-decide.js?v=1.2.0"></script>
+<script src="pdrd-spec.js?v=1.2.0"></script>
+<script src="pdrd-texts.js?v=1.2.0"></script>
+<script src="pdrd-docx.js?v=1.2.0"></script>
+<script src="pdrd-svg.js?v=1.2.0"></script>
+<script src="pdrd-dxf.js?v=1.2.0"></script>
+<script src="pdrd-media.js?v=1.2.0"></script>
+<script src="pdrd-map.js?v=1.2.0"></script>
+<script src="pdrd-pdf.js?v=1.2.0"></script>
 <script>
 (function(){
   var $ = function(id){ return document.getElementById(id); };
@@ -123,6 +142,30 @@
       return PDRD_MEDIA.loadUnderlay(d).then(function(){ PDRD_SVG.reset(d); msg('ok','Подложка сохранена: ' + m.name + '. Постройте листы заново.'); });
     }).catch(function(e){ msg('bad','Подложку сохранить не удалось: ' + e.message); });
   };
+  (function(){
+    var sel = $('mapSrc');
+    PDRD_MAP.SOURCES.forEach(function(s){ var o = el('option','',s.title); o.value = s.id; sel.appendChild(o); });
+    sel.value = (d.mapUnderlayMeta && d.mapUnderlayMeta.source) || 'osm';
+  })();
+  $('bMap').onclick = function(){
+    var bbox = PDRD_MAP.routeBbox(d);
+    if (!bbox) return msg('warn','В проекте нет опор с координатами.');
+    var z = parseInt($('mapZoom').value, 10);
+    msg('warn','Загрузка карты…');
+    PDRD_MAP.tiles(bbox, { source: $('mapSrc').value, url: $('mapUrl').value.trim(), maxZoom: isFinite(z) ? z : 18 })
+      .then(function(r){
+        return PDRD_MEDIA.saveUnderlayData(d, r.dataUrl, r.name, r.nw, r.se, { attr: r.attr, source: r.source, zoom: r.zoom })
+          .then(function(){
+            PDRD.replaceAll(d); d = PDRD.load();
+            return PDRD_MEDIA.loadUnderlay(d).then(function(){
+              PDRD_SVG.reset(d);
+              msg('ok','Карта загружена: ' + r.tiles + ' тайлов, уровень ' + r.zoom + (r.failed ? ', не загружено ' + r.failed : '') + '. Постройте листы заново.');
+              UF.forEach(function(f){ var v = { nwLat:r.nw.lat, nwLon:r.nw.lon, seLat:r.se.lat, seLon:r.se.lon }[f[0]]; undVals[f[0]] = v; $('u_' + f[0]).value = String(v.toFixed(6)).replace('.', ','); });
+            });
+          });
+      })
+      .catch(function(e){ msg('bad','Карту загрузить не удалось: ' + e.message + '. Можно загрузить своё изображение (выкопировку, снимок) и указать координаты углов.'); });
+  };
   $('bUndDel').onclick = function(){
     PDRD_MEDIA.removeUnderlay(d).then(function(){ PDRD.replaceAll(d); d = PDRD.load(); PDRD_SVG.reset(d); msg('ok','Подложка убрана.'); });
   };
@@ -135,6 +178,9 @@
     var t0 = performance.now();
     PDRD_SVG.reset(d);
     list = PDRD_SVG.sheets(d);
+    PDRD_MAP.bake(list).then(function(){ draw(t0); });
+  }
+  function draw(t0){
     var host = $('sheets'); host.innerHTML = ''; var toc = $('toc'); toc.innerHTML = '';
     list.forEach(function(sh){
       toc.appendChild(el('li','', sh.meta.title + (sh.meta.scale ? ', М 1:' + sh.meta.scale : '')));
@@ -147,7 +193,17 @@
   $('bPrint').onclick = function(){ window.print(); };
   $('bDxf').onclick = function(){
     var z = new JSZip();
-    list.forEach(function(sh){ z.file(PDRD_DXF.fileName(d, sh), PDRD_DXF.cp1251(PDRD_DXF.toDxf(sh))); });
+    list.forEach(function(sh){
+      var name = PDRD_DXF.fileName(d, sh);
+      z.file(name, PDRD_DXF.cp1251(PDRD_DXF.toDxf(sh)));
+      var im = PDRD_MAP.imageOf(sh);
+      if (im){
+        var base = name.replace(/\.dxf$/, '');
+        z.file(base + '.jpg', PDRD_MAP.dataUrlToBytes(im.href));
+        z.file(base + '.jgw', PDRD_MAP.worldFile(im, PDRD_SVG.H, im.pxW || 2048, im.pxH || 2048));
+      }
+    });
+    z.file('Podlozhka_README.txt', '\ufeffРастровая подложка в DXF подключается как внешняя ссылка: команда «Вставка растрового изображения» (IMAGEATTACH), файл <имя листа>.jpg рядом с DXF; файл привязки <имя листа>.jgw задаёт положение и масштаб в координатах листа (мм). Источник карты указан в примечаниях листа.\r\n');
     z.generateAsync({ type:'blob', compression:'DEFLATE' }).then(function(b){ save(b, (d.passport.shifr || 'PD_RD').replace(/[^\w\-]+/g,'_') + '-LKS-DXF.zip', 'application/zip'); msg('ok','DXF: ' + list.length + ' файлов.'); });
   };
   $('bPdf').onclick = function(){
@@ -159,6 +215,6 @@
   };
 })();
 </script>
-<script src="pdrd-nav.js?v=1.1.0"></script>
+<script src="pdrd-nav.js?v=1.2.0"></script>
 </body>
 </html>

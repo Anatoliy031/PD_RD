@@ -45,7 +45,20 @@ function build(d, opt) {
     });
     step('Чертежи');
     var sheets = global.PDRD_SVG.sheets(d);
-    sheets.forEach(function (sh) { put('3_Chertezhi_DXF/' + global.PDRD_DXF.fileName(d, sh).replace('.dxf', sfx + '.dxf'), global.PDRD_DXF.cp1251(global.PDRD_DXF.toDxf(sh))); });
+    var prep = global.PDRD_MAP ? global.PDRD_MAP.bake(sheets) : Promise.resolve(sheets);
+    return prep.then(function () {
+    sheets.forEach(function (sh) {
+      var name = global.PDRD_DXF.fileName(d, sh).replace('.dxf', sfx + '.dxf');
+      put('3_Chertezhi_DXF/' + name, global.PDRD_DXF.cp1251(global.PDRD_DXF.toDxf(sh)));
+      var im = global.PDRD_MAP ? global.PDRD_MAP.imageOf(sh) : null;
+      if (im && im.href) {
+        var base = '3_Chertezhi_DXF/' + name.replace(/\.dxf$/, '');
+        put(base + '.jpg', global.PDRD_MAP.dataUrlToBytes(im.href));
+        put(base + '.jgw', global.PDRD_MAP.worldFile(im, global.PDRD_SVG.H, im.pxW || 2048, im.pxH || 2048));
+      }
+    });
+    if (sheets.some(function (sh) { return global.PDRD_MAP && global.PDRD_MAP.imageOf(sh); }))
+      z.file('3_Chertezhi_DXF/Podlozhka_README.txt', '\ufeffРастровая подложка подключается в САПР как внешняя ссылка (команда IMAGEATTACH): файл <имя листа>.jpg рядом с DXF, файл привязки <имя листа>.jgw задаёт положение и масштаб в координатах листа (мм). Источник карты указан в примечаниях листа.\r\n');
     var pdf = global.PDRD_PDF && sheets.length ? global.PDRD_PDF.render(sheets, { title: d.passport.object }).then(function (buf) { put('2_RD/' + safe(code + '-LKS-chertezhi' + sfx) + '.pdf', buf); return null; }).catch(function (e) { return e.message; }) : Promise.resolve('листов нет');
     return pdf.then(function (pdfErr) {
       step('Ведомости и трасса');
@@ -67,6 +80,7 @@ function build(d, opt) {
           });
         });
       });
+    });
     });
   });
 }

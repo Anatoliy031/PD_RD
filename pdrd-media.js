@@ -61,11 +61,23 @@ function saveUnderlay(d, file, nw, se) {
     });
   });
 }
+/* Сохранение подложки, уже полученной как data:URL (например, карта из тайлов) */
+function saveUnderlayData(d, dataUrl, name, nw, se, extra) {
+  extra = extra || {};
+  var key = 'underlay_' + Date.now().toString(36);
+  return put(key, dataUrl).then(function () {
+    d.mapUnderlayMeta = { key: key, name: name, size: Math.round(dataUrl.length * 0.75), nw: nw, se: se, at: new Date().toISOString(),
+                          attr: extra.attr || '', source: extra.source || '', zoom: extra.zoom || null };
+    d.mapUnderlay = { dataUrl: dataUrl, name: name, nw: nw, se: se, attr: extra.attr || '' };
+    return d.mapUnderlayMeta;
+  });
+}
+
 function loadUnderlay(d) {
   var m = d.mapUnderlayMeta;
   if (!m || !m.key) { d.mapUnderlay = null; return Promise.resolve(null); }
   return get(m.key).then(function (url) {
-    d.mapUnderlay = url ? { dataUrl: url, name: m.name, nw: m.nw, se: m.se } : null;
+    d.mapUnderlay = url ? { dataUrl: url, name: m.name, nw: m.nw, se: m.se, attr: m.attr || '' } : null;
     return d.mapUnderlay;
   }).catch(function () { d.mapUnderlay = null; return null; });
 }
@@ -74,5 +86,5 @@ function removeUnderlay(d) {
   d.mapUnderlayMeta = null; d.mapUnderlay = null;
   return m && m.key ? del(m.key).catch(function () { return true; }) : Promise.resolve(true);
 }
-global.PDRD_MEDIA = { put: put, get: get, del: del, fileToDataUrl: fileToDataUrl, saveUnderlay: saveUnderlay, loadUnderlay: loadUnderlay, removeUnderlay: removeUnderlay };
+global.PDRD_MEDIA = { saveUnderlayData: saveUnderlayData, put: put, get: get, del: del, fileToDataUrl: fileToDataUrl, saveUnderlay: saveUnderlay, loadUnderlay: loadUnderlay, removeUnderlay: removeUnderlay };
 })(typeof window !== 'undefined' ? window : globalThis);
