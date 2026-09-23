@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Решения по опорам — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.0.1">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.1.0">
 <style>
 .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px}
 .frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
@@ -48,6 +48,21 @@ small.r{display:block;color:var(--muted);font-size:12px}
     <h2>Параметры трассы</h2>
     <p class="sub" id="profNote"></p>
     <div class="frm" id="fPar"></div>
+    <div class="frm" style="margin-top:10px">
+      <div>
+        <label for="selMode">Расстановка муфт и запасов</label>
+        <select id="selMode" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:15px">
+          <option value="manual">вручную — опоры указывает проектировщик или заказчик</option>
+          <option value="auto">автоматически — точки ветвления и стыки строительных длин</option>
+        </select>
+        <div class="hint">В ручном режиме программа не расставляет муфты: отметьте нужные опоры в столбце «Муфта» (фильтр «Муфты» показывает выбранные).</div>
+      </div>
+      <div>
+        <label for="find">Найти опору по номеру</label>
+        <input id="find" placeholder="например, 12 или 1-14а">
+        <div class="hint">Показывает опоры с этим номером во всех линиях.</div>
+      </div>
+    </div>
   </section>
 
   <section class="panel">
@@ -74,13 +89,13 @@ small.r{display:block;color:var(--muted);font-size:12px}
   </section>
   </div>
 </main>
-<script src="pdrd-core.js?v=1.0.1"></script>
-<script src="pdrd-norms.js?v=1.0.1"></script>
-<script src="pdrd-profiles.js?v=1.0.1"></script>
-<script src="pdrd-refs-v25.js?v=1.0.1"></script>
-<script src="pdrd-calc.js?v=1.0.1"></script>
-<script src="pdrd-design.js?v=1.0.1"></script>
-<script src="pdrd-decide.js?v=1.0.1"></script>
+<script src="pdrd-core.js?v=1.1.0"></script>
+<script src="pdrd-norms.js?v=1.1.0"></script>
+<script src="pdrd-profiles.js?v=1.1.0"></script>
+<script src="pdrd-refs-v25.js?v=1.1.0"></script>
+<script src="pdrd-calc.js?v=1.1.0"></script>
+<script src="pdrd-design.js?v=1.1.0"></script>
+<script src="pdrd-decide.js?v=1.1.0"></script>
 <script>
 (function(){
   var P = PDRD, X = PDRD_DECIDE, C = PDRD_CALC, $ = function(id){ return document.getElementById(id); };
@@ -89,9 +104,17 @@ small.r{display:block;color:var(--muted);font-size:12px}
   if (!P.hasProject() || !P.load().poles.length) { $('noProj').hidden = false; return; }
   $('app').hidden = false;
   var d = P.load(); d.decideParams = d.decideParams || {};
-  var state = { filter:'all', limit:100, info:null };
+  var state = { filter:'all', limit:100, info:null, find:'' };
   var ST = { ok:'обосновано', exceed:'не выполнено', blocked:'нет данных', excluded:'исключена' };
 
+  function sleeveUi(){
+    var sel = $('selMode');
+    sel.value = (d.decideParams || {}).sleeveMode === 'auto' ? 'auto' : 'manual';
+    sel.onchange = function(){ d.decideParams.sleeveMode = sel.value; P.replaceAll(d); d = P.load(); refresh(); };
+    var f = $('find');
+    f.value = state.find;
+    f.oninput = function(){ state.find = f.value.trim(); state.limit = 100; table(); };
+  }
   function params(){
     var prof = PDRD_PROFILES.get(d.profile.operator), pp = prof.params || {};
     $('profNote').textContent = 'Профиль: ' + prof.title + '. ' + (pp.note || 'Значения профиля подставляются, если поле пусто.');
@@ -128,7 +151,8 @@ small.r{display:block;color:var(--muted);font-size:12px}
   function refresh(){
     state.info = X.poleInfo(d);
     var t = X.totals(d), st = $('stats'); st.innerHTML = '';
-    [[t.place,'размещать'],[t.recheck,'после поверочного расчёта'],[t.extra,'промежуточная опора (Е.1)'],[t.after,'после восстановления'],[t.bypass,'обход'],[t.sleeves,'муфт и запасов'],[t.dampers,'опор с гасителями']]
+    var mode = (d.decideParams || {}).sleeveMode === 'auto' ? 'авто' : 'вручную';
+    [[t.place,'размещать'],[t.recheck,'после поверочного расчёта'],[t.extra,'промежуточная опора (Е.1)'],[t.after,'после восстановления'],[t.bypass,'обход'],[t.sleeves,'муфт и запасов (' + mode + ')'],[t.dampers,'опор с гасителями']]
       .forEach(function(x){ var c = el('div','stat'); c.appendChild(el('b','',String(x[0]||0))); c.appendChild(el('span','',x[1])); st.appendChild(c); });
     var ch = X.check(d), host = $('checks'); host.innerHTML = '';
     if (ch.length){
@@ -143,6 +167,7 @@ small.r{display:block;color:var(--muted);font-size:12px}
   var FL = [['all','Все'],['fork','Развилки'],['sleeve','Муфты'],['manual','Изменены вручную'],['after','После восстановления'],['nodec','Без решения']];
   function pass(p){
     var x = p.design || {}, inf = state.info[p.id];
+    if (state.find && !(p.lines || []).some(function(l){ return String(l.num).toLowerCase().indexOf(state.find.toLowerCase()) >= 0; })) return false;
     switch(state.filter){
       case 'fork': return ['extra','recheck'].indexOf(x.decision) >= 0 || inf.overGab;
       case 'sleeve': return !!x.sleeve;
@@ -182,8 +207,13 @@ small.r{display:block;color:var(--muted);font-size:12px}
       Object.keys(X.NODES).forEach(function(k){ var op = el('option','',k); op.value = k; op.title = X.NODES[k]; if (x.node === k) op.selected = true; ns.appendChild(op); });
       ns.onchange = function(){ x.node = ns.value; manual(); }; c5.appendChild(ns); tr.appendChild(c5);
       var c6 = el('td'), sc = el('input'); sc.type = 'checkbox'; sc.checked = !!x.sleeve; sc.setAttribute('aria-label','Муфта');
-      sc.onchange = function(){ x.sleeve = sc.checked; if (sc.checked && !x.sleeveType) x.sleeveType = 'прямая'; manual(); }; c6.appendChild(sc);
-      if (x.sleeve && x.sleeveType) c6.appendChild(el('small','r', x.sleeveType)); tr.appendChild(c6);
+      sc.onchange = function(){ X.setSleeve(d, p.id, sc.checked); manual(); table(); }; c6.appendChild(sc);
+      if (x.sleeve){
+        var ts = el('select'); ts.setAttribute('aria-label','Тип муфты');
+        ['прямая','разветвительная','дроп-муфта','оптический распределительный шкаф'].forEach(function(o){ var op = el('option','',o); op.value = o; if ((x.sleeveType||'прямая') === o) op.selected = true; ts.appendChild(op); });
+        ts.onchange = function(){ x.sleeveType = ts.value; manual(); }; c6.appendChild(ts);
+      }
+      tr.appendChild(c6);
       var c7 = el('td'), rv = el('input','h'); rv.type = 'text'; rv.inputMode = 'decimal'; rv.value = x.reserve_m === null || x.reserve_m === undefined ? '' : String(x.reserve_m).replace('.', ',');
       rv.setAttribute('aria-label','Запас'); rv.onchange = function(){ x.reserve_m = numIn(rv.value); manual(); }; c7.appendChild(rv); tr.appendChild(c7);
       var c8 = el('td'); (x.why || []).forEach(function(w2){ c8.appendChild(el('small','r', w2)); }); if (x.dampers) c8.appendChild(el('small','r','гасители вибрации')); tr.appendChild(c8);
@@ -206,9 +236,9 @@ small.r{display:block;color:var(--muted);font-size:12px}
   };
   $('bSave').onclick = function(){ P.replaceAll(d); d = P.load(); msg('ok','Решения сохранены.'); refresh(); };
 
-  params(); lines(); refresh();
+  params(); sleeveUi(); lines(); refresh();
 })();
 </script>
-<script src="pdrd-nav.js?v=1.0.1"></script>
+<script src="pdrd-nav.js?v=1.1.0"></script>
 </body>
 </html>

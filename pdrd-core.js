@@ -5,7 +5,7 @@
 (function (global) {
 'use strict';
 
-var VERSION = '1.0.1';
+var VERSION = '1.1.0';
 var SCHEMA  = 'pdrd-project/1';
 var PREFIX  = 'pdrd_';
 var KEY     = 'pdrd_project_v1';
@@ -13,6 +13,12 @@ var STAMP   = 'pdrd_project_v1_stamp';
 var DB_NAME = 'pdrd_media';
 /* Ключи V25. Запись в них запрещена (раздел 1.4 инструкции). */
 var V25 = { object: 'ppo_vols_object_v2', photos: 'ppo_vols_photos' };
+
+var APPROVER = {
+  fio: 'А.В. Чепусов',
+  fioFull: 'Чепусов Александр Владимирович',
+  post: 'Заместитель директора по развитию и технологическому присоединению филиала ПАО «Россети Юг» — «Кубаньэнерго»'
+};
 
 var GIP = {
   fio: 'Е.В. Куличкин',
@@ -52,7 +58,8 @@ function blank() {
       designCustomer: '',// заказчик ПД (с кем договор на ПИР)
       owner: 'ПАО «Россети Юг»',
       branch: 'филиал ПАО «Россети Юг» — «Кубаньэнерго»',
-      signs: { gip: GIP.fio, gipPost: GIP.post, razrab: '', prov: '', nkontr: '' },
+      signs: { gip: GIP.fio, gipPost: GIP.post, razrab: '', prov: '', nkontr: '',
+               approver: APPROVER.fio, approverPost: APPROVER.post },
       releaseDate: ''
     },
     profile: { operator: 'rostelecom-b2c-gpon', switches: {} },
@@ -239,6 +246,7 @@ function passportGaps(d) {
   if (!s.prov) g.push('Не указан «Проверил»');
   if (!s.nkontr) g.push('Не указан «Н. контроль»');
   if (!s.gip) g.push('Не указан ГИП');
+  if (!s.approver) g.push('Не указан утверждающий документацию');
   var sro = d.legal.sro;
   if (!sro.name || !sro.regNumber || !sro.extractDate) g.push('Не заполнены реквизиты СРО');
   if (!d.basis.report13.number) g.push('Не указан отчёт по п. 13 Правил');
@@ -257,7 +265,7 @@ function passportGaps(d) {
 
 global.PDRD = {
   VERSION: VERSION, SCHEMA: SCHEMA, KEY: KEY, STAMP: STAMP, PREFIX: PREFIX,
-  DB_NAME: DB_NAME, V25: V25, GIP: GIP,
+  DB_NAME: DB_NAME, V25: V25, GIP: GIP, APPROVER: APPROVER,
   blank: blank, migrate: migrate, load: load, save: save, refresh: refresh,
   reset: reset, replaceAll: replaceAll, hasProject: hasProject,
   exportJson: exportJson, importJson: importJson, parseProject: parseProject,

@@ -51,12 +51,13 @@ function toDxf(sh) {
   g(0, 'SECTION'); g(2, 'BLOCKS'); g(0, 'ENDSEC');
   g(0, 'SECTION'); g(2, 'ENTITIES');
   sh.p.forEach(function (e) {
-    if (e.t === 'line') { g(0, 'LINE'); g(8, e.l); g(10, f(e.x1)); g(20, f(Y(e.y1))); g(30, 0); g(11, f(e.x2)); g(21, f(Y(e.y2))); g(31, 0); }
+    if (e.t === 'line') { g(0, 'LINE'); g(8, e.l); if (e.dash) g(6, 'DASHED'); g(10, f(e.x1)); g(20, f(Y(e.y1))); g(30, 0); g(11, f(e.x2)); g(21, f(Y(e.y2))); g(31, 0); }
     else if (e.t === 'poly') {
       g(0, 'POLYLINE'); g(8, e.l); if (e.dash) g(6, 'DASHED'); g(66, 1); g(10, 0); g(20, 0); g(30, 0); g(70, e.c ? 1 : 0);
       e.pts.forEach(function (p) { g(0, 'VERTEX'); g(8, e.l); g(10, f(p[0])); g(20, f(Y(p[1]))); g(30, 0); });
       g(0, 'SEQEND'); g(8, e.l);
     } else if (e.t === 'circle') { g(0, 'CIRCLE'); g(8, e.l); g(10, f(e.cx)); g(20, f(Y(e.cy))); g(30, 0); g(40, f(e.r)); }
+    else if (e.t === 'image') { return; }
     else if (e.t === 'text') {
       if (e.wm) return;
       var al = e.a === 'middle' ? 1 : (e.a === 'end' ? 2 : 0);

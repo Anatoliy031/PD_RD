@@ -58,10 +58,16 @@ function build() {
                   '10': [{ mark: 'АС 35/6.2', n: 3, d_mm: 8.4, mass_kg_km: 148, h_m: 8.5, T_kn: 1.5, f_max_m: 1.3 }] };
   d.stands = { 'СВ95-2': { width_m: 0.16, height_m: 7.3 }, 'СВ105': { width_m: 0.18, height_m: 8.2 } };
   d.poleCapacity = { 'КА8-1': { m_cap_knm: 60 }, 'А8-1': { m_cap_knm: 60 }, 'ОА8-1': { m_cap_knm: 60 }, 'А10-1': { m_cap_knm: 110 }, 'УА10-1': { m_cap_knm: 110 } };
-  d.decideParams = { buildLength_m: 2000, reserveT_m: 15, dampersFromSpan_m: 70 };
+  d.decideParams = { buildLength_m: 2000, reserveT_m: 15, dampersFromSpan_m: 70, sleeveMode: 'manual' };
   d.metrology = global.PDRD_TEXTS.defaultMetrology(d);
   d.demo = true;
   global.PDRD_DESIGN.solve(d);
+  /* ДЕМО: муфты назначены «заказчиком» на двух опорах */
+  ['12', '10'].forEach(function (numStr) {
+    var p2 = d.poles.filter(function (x) { return (x.lines || []).some(function (l) { return l.num === numStr; }); })[0];
+    if (p2) try { global.PDRD_DECIDE.setSleeve(d, p2.id, true, { type: numStr === '12' ? 'разветвительная' : 'прямая' }); } catch (e) {}
+  });
+  global.PDRD_DESIGN.store(d);
   return d;
 }
 global.PDRD_DEMO = { v25: v25, build: build };

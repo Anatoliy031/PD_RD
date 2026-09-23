@@ -93,6 +93,7 @@ function run(d, opt) {
   if (S && d.poles.some(function (p) { return p.design && p.design.decision; })) {
     var sp = S.build(d);
     if (sp.lengths.total_m < sp.lengths.route_m) add('Спецификация', 'stop', 'Длина кабеля меньше протяжённости трассы');
+    if (sp.lengths.short_m) add('Спецификация', 'stop', 'Протяжённость трассы по расчёту (' + (sp.lengths.route_m / 1000).toFixed(3).replace('.', ',') + ' км) меньше заявленной в исходных данных на ' + Math.round(sp.lengths.short_m) + ' м — проверьте пролёты, решения по опорам и перечень линий');
     if (!d.cable.cert) add('Спецификация', 'stop', 'Нет реквизитов документа соответствия на кабель', 'ТТ № 282р, п. 3.3; приказ Мининформсвязи № 47');
     if (!d.cable.approved) add('Спецификация', 'stop', 'Марки кабеля и арматуры не выбраны из утверждённого каталога');
     if (!sp.lengths.params.sagFactorSet) add('Спецификация', 'warn', 'Коэффициент на провис и отходы принят по умолчанию (' + String(sp.lengths.params.sagFactor).replace('.', ',') + ') — подтвердить');

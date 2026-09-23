@@ -4,8 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Чертежи — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.0.1">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.1.0">
 <style>
+.frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 14px}
+.frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+.frm input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:15px}
+.frm .hint{font-size:12px;color:var(--muted);margin-top:3px}
 .sheets{display:grid;gap:18px}
 .sh{background:#fff;border:1px solid var(--line-s);border-radius:6px;padding:10px}
 .sh h3{font-size:14px;margin:0 0 6px}
@@ -42,35 +46,94 @@
     <div id="msg"></div>
     <ol class="toc" id="toc"></ol>
   </section>
+  <section class="panel">
+    <h2>Подложка ситуационного плана</h2>
+    <p class="sub">Растровая подложка (снимок или выкопировка) привязывается по координатам северо-западного и юго-восточного углов изображения — как в Google Earth: «Добавить» → «Наложение изображения» → вкладка «Местоположение». Подложка хранится в этом браузере и в файл проекта не входит; в DXF не выгружается.</p>
+    <div class="frm" id="und"></div>
+    <div class="btns">
+      <label class="btn" for="fUnd">Выбрать изображение</label>
+      <input type="file" id="fUnd" accept="image/png,image/jpeg,image/webp" hidden>
+      <button class="btn" id="bUndBox" type="button">Подставить углы по трассе</button>
+      <button class="btn danger" id="bUndDel" type="button">Убрать подложку</button>
+    </div>
+    <div id="undMsg"></div>
+  </section>
+
   <div class="sheets" id="sheets"></div>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="pdrd-core.js?v=1.0.1"></script>
-<script src="pdrd-norms.js?v=1.0.1"></script>
-<script src="pdrd-profiles.js?v=1.0.1"></script>
-<script src="pdrd-marks.js?v=1.0.1"></script>
-<script src="pdrd-refs-v25.js?v=1.0.1"></script>
-<script src="pdrd-calc.js?v=1.0.1"></script>
-<script src="pdrd-design.js?v=1.0.1"></script>
-<script src="pdrd-decide.js?v=1.0.1"></script>
-<script src="pdrd-spec.js?v=1.0.1"></script>
-<script src="pdrd-texts.js?v=1.0.1"></script>
-<script src="pdrd-docx.js?v=1.0.1"></script>
-<script src="pdrd-svg.js?v=1.0.1"></script>
-<script src="pdrd-dxf.js?v=1.0.1"></script>
-<script src="pdrd-pdf.js?v=1.0.1"></script>
+<script src="pdrd-core.js?v=1.1.0"></script>
+<script src="pdrd-norms.js?v=1.1.0"></script>
+<script src="pdrd-profiles.js?v=1.1.0"></script>
+<script src="pdrd-marks.js?v=1.1.0"></script>
+<script src="pdrd-refs-v25.js?v=1.1.0"></script>
+<script src="pdrd-calc.js?v=1.1.0"></script>
+<script src="pdrd-design.js?v=1.1.0"></script>
+<script src="pdrd-decide.js?v=1.1.0"></script>
+<script src="pdrd-spec.js?v=1.1.0"></script>
+<script src="pdrd-texts.js?v=1.1.0"></script>
+<script src="pdrd-docx.js?v=1.1.0"></script>
+<script src="pdrd-svg.js?v=1.1.0"></script>
+<script src="pdrd-dxf.js?v=1.1.0"></script>
+<script src="pdrd-media.js?v=1.1.0"></script>
+<script src="pdrd-pdf.js?v=1.1.0"></script>
 <script>
 (function(){
   var $ = function(id){ return document.getElementById(id); };
   function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
   function msg(cls, t){ var m = $('msg'); m.innerHTML = ''; m.appendChild(el('div','msg '+cls,t)); }
   function save(data, name, type){ PDRD.download(data, name, type); }
-  var list = [], d = null;
+  var list = [], d = PDRD.load(), undFile = null;
+  var UF = [['nwLat','Север (широта) верхнего левого угла'],['nwLon','Запад (долгота) верхнего левого угла'],['seLat','Юг (широта) нижнего правого угла'],['seLon','Восток (долгота) нижнего правого угла']];
+  var undVals = {};
+  (function(){
+    var m = d.mapUnderlayMeta;
+    if (m){ undVals = { nwLat:m.nw.lat, nwLon:m.nw.lon, seLat:m.se.lat, seLon:m.se.lon }; }
+    var host = $('und');
+    UF.forEach(function(f){
+      var w = el('div'), l = el('label','',f[1]), i = el('input'); i.id = 'u_' + f[0]; i.inputMode = 'decimal';
+      i.value = undVals[f[0]] === undefined ? '' : String(undVals[f[0]]).replace('.', ',');
+      i.onchange = function(){ var n = parseFloat(i.value.replace(',', '.')); undVals[f[0]] = isFinite(n) ? n : undefined; };
+      l.htmlFor = i.id; w.appendChild(l); w.appendChild(i); host.appendChild(w);
+    });
+    if (m) msg('ok', 'Подложка: ' + m.name + ' (' + Math.round(m.size / 1024) + ' КБ).');
+  })();
+  function undCorners(){
+    if ([undVals.nwLat, undVals.nwLon, undVals.seLat, undVals.seLon].some(function(v){ return v === undefined; })) return null;
+    return { nw: { lat: undVals.nwLat, lon: undVals.nwLon }, se: { lat: undVals.seLat, lon: undVals.seLon } };
+  }
+  $('bUndBox').onclick = function(){
+    var ps = d.poles.filter(function(p){ return p.coords && p.coords.lat !== null; });
+    if (!ps.length) return msg('warn','В проекте нет опор с координатами.');
+    var lat = ps.map(function(p){ return p.coords.lat; }), lon = ps.map(function(p){ return p.coords.lon; });
+    var pad = 0.002;
+    undVals = { nwLat: Math.max.apply(null, lat) + pad, nwLon: Math.min.apply(null, lon) - pad, seLat: Math.min.apply(null, lat) - pad, seLon: Math.max.apply(null, lon) + pad };
+    UF.forEach(function(f){ $('u_' + f[0]).value = String(undVals[f[0]].toFixed(6)).replace('.', ','); });
+    msg('ok','Подставлены углы описанного прямоугольника трассы с запасом. В Google Earth задайте те же координаты для наложения изображения.');
+  };
+  $('fUnd').onchange = function(ev){
+    var f = ev.target.files[0]; ev.target.value = '';
+    if (!f) return;
+    var c = undCorners();
+    if (!c) return msg('warn','Сначала укажите координаты углов изображения (или нажмите «Подставить углы по трассе»).');
+    if (f.size > 12 * 1024 * 1024) return msg('bad','Изображение больше 12 МБ — уменьшите разрешение.');
+    PDRD_MEDIA.saveUnderlay(d, f, c.nw, c.se).then(function(m){
+      PDRD.replaceAll(d); d = PDRD.load();
+      return PDRD_MEDIA.loadUnderlay(d).then(function(){ PDRD_SVG.reset(d); msg('ok','Подложка сохранена: ' + m.name + '. Постройте листы заново.'); });
+    }).catch(function(e){ msg('bad','Подложку сохранить не удалось: ' + e.message); });
+  };
+  $('bUndDel').onclick = function(){
+    PDRD_MEDIA.removeUnderlay(d).then(function(){ PDRD.replaceAll(d); d = PDRD.load(); PDRD_SVG.reset(d); msg('ok','Подложка убрана.'); });
+  };
   $('bBuild').onclick = function(){
     d = PDRD.load();
     if (!d.poles.length){ msg('warn','Проект пуст — загрузите исходные данные.'); return; }
+    PDRD_MEDIA.loadUnderlay(d).then(build);
+  };
+  function build(){
     var t0 = performance.now();
+    PDRD_SVG.reset(d);
     list = PDRD_SVG.sheets(d);
     var host = $('sheets'); host.innerHTML = ''; var toc = $('toc'); toc.innerHTML = '';
     list.forEach(function(sh){
@@ -80,7 +143,7 @@
     });
     msg(list.length ? 'ok' : 'warn', list.length ? 'Построено листов: ' + list.length + ' за ' + Math.round(performance.now() - t0) + ' мс.' : 'Листы не построены: примите решения по опорам и выполните расчёт.');
     ['bPdf','bDxf','bPrint'].forEach(function(b){ $(b).disabled = !list.length; });
-  };
+  }
   $('bPrint').onclick = function(){ window.print(); };
   $('bDxf').onclick = function(){
     var z = new JSZip();
@@ -96,6 +159,6 @@
   };
 })();
 </script>
-<script src="pdrd-nav.js?v=1.0.1"></script>
+<script src="pdrd-nav.js?v=1.1.0"></script>
 </body>
 </html>

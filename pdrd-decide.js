@@ -44,6 +44,7 @@ function params(d) {
     sleeveBelowCrossarm: !!pick('sleeveBelowCrossarm'),
     cableH: num((d.designDefaults || {}).cableH),
     minGap: num(own.minGap_m) || 0.05,
+    sleeveMode: own.sleeveMode === 'auto' ? 'auto' : 'manual',
     profileNote: pr.note || ''
   };
 }
@@ -172,7 +173,8 @@ function propose(d, opt) {
     out.changed++;
   });
   fixSpans(d, info, opt);
-  placeSleeves(d, info, prm);
+  if (prm.sleeveMode === 'auto') placeSleeves(d, info, prm);
+  else keepSleeves(d, prm);
   placeDampers(d, info, prm);
   return out;
 }
@@ -192,6 +194,18 @@ function fixSpans(d, info, opt) {
     if (['place', 'recheck'].indexOf(pick.design.decision) < 0) return;
     pick.design.decision = 'extra';
     pick.design.why.push('пролёт ' + s.from + ' — ' + s.to + ': ' + (s.reasons || []).join('; ') + ' — дополнительная опора в пролёте');
+  });
+}
+
+/* Ручной режим: муфты остаются там, где их назначил проектировщик (заказчик);
+   программа только дополняет узел и длину запаса. */
+function keepSleeves(d, prm) {
+  d.poles.forEach(function (p) {
+    var x = p.design; if (!x || !x.sleeve) return;
+    if (['place', 'recheck', 'extra', 'after'].indexOf(x.decision) < 0) return;
+    x.node = 'С';
+    if (num(x.reserve_m) === null) x.reserve_m = prm.reserveT_m;
+    if (!x.sleeveType) x.sleeveType = 'прямая';
   });
 }
 
@@ -243,6 +257,8 @@ function placeDampers(d, info, prm) {
 function check(d) {
   var info = poleInfo(d), prm = params(d), C = global.PDRD_CALC, out = [];
   function add(lv, p, text, ref) { out.push({ lv: lv, pole: p ? p.id : '', where: p ? (p.lines || []).map(function (l) { return l.num; }).join(' / ') + ' (' + (p.mark || '—') + ')' : 'проект', text: text, ref: ref || '' }); }
+  var sl = d.poles.filter(function (p) { return p.design && p.design.sleeve; });
+  if (!sl.length) add(prm.sleeveMode === 'auto' ? 'warn' : 'stop', null, 'Муфты и запасы кабеля не назначены' + (prm.sleeveMode === 'auto' ? '' : ' (ручной режим): отметьте опоры, указанные заказчиком, в столбце «Муфта»'));
   var noDec = d.poles.filter(function (p) { return !p.design || !p.design.decision; });
   if (noDec.length) add('stop', null, 'Решение не назначено для ' + noDec.length + ' опор');
   if (prm.reserveT_m === null) add('stop', null, 'Длина технологического запаса не задана' + (prm.profileNote ? ' (' + prm.profileNote + ')' : ''));
@@ -294,6 +310,28 @@ function totals(d) {
   return t;
 }
 
-global.PDRD_DECIDE = { DECISIONS: DECISIONS, NODES: NODES, params: params, poleInfo: poleInfo, heightWindow: heightWindow,
+/* Назначить или снять муфту на опоре (решение проектировщика или заказчика) */
+function setSleeve(d, poleId, on, opt) {
+  opt = opt || {};
+  var prm = params(d);
+  var p = d.poles.filter(function (x) { return x.id === poleId; })[0];
+  if (!p) throw new Error('опора не найдена');
+  p.design = p.design || { why: [] };
+  p.design.sleeve = !!on;
+  p.design.by = 'проектировщик';
+  if (on) {
+    p.design.sleeveType = opt.type || p.design.sleeveType || 'прямая';
+    if (num(p.design.reserve_m) === null) p.design.reserve_m = opt.reserve_m !== undefined ? opt.reserve_m : prm.reserveT_m;
+    p.design.node = 'С';
+    (p.design.why = p.design.why || []).push('муфта назначена проектировщиком');
+  } else {
+    p.design.sleeveType = ''; p.design.reserve_m = null;
+    var inf = poleInfo(d)[poleId];
+    p.design.node = nodeFor(inf);
+  }
+  return p;
+}
+
+global.PDRD_DECIDE = { DECISIONS: DECISIONS, NODES: NODES, params: params, setSleeve: setSleeve, poleInfo: poleInfo, heightWindow: heightWindow,
   propose: propose, check: check, totals: totals, title: title };
 })(typeof window !== 'undefined' ? window : globalThis);

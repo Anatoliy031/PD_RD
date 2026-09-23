@@ -38,6 +38,8 @@ function render(sheets, opt) {
         } else if (e.t === 'circle') {
           doc.setLineWidth(0.25);
           if (e.fill) { doc.setFillColor(c[0], c[1], c[2]); doc.circle(e.cx, e.cy, e.r, 'F'); } else doc.circle(e.cx, e.cy, e.r, 'S');
+        } else if (e.t === 'image') {
+          try { doc.addImage(e.href, e.x, e.y, e.w, e.h, undefined, 'FAST'); } catch (err) { if (global.console) console.warn('подложка не добавлена в PDF', err); }
         } else if (e.t === 'text') {
           if (e.wm) doc.setTextColor(227, 168, 168); else doc.setTextColor(c[0], c[1], c[2]);
           doc.setFontSize(e.h * 2.8346);

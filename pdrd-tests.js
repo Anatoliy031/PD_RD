@@ -510,6 +510,29 @@ if (DC && IM) {
     eq(p.design.decision, 'extra'); eq(p.design.why.some(function(w){ return /нет свободного/.test(w); }), true);
     return 'Е.1';
   });
+  t('Муфты: ручной режим — программа их не расставляет', function(){
+    var d0 = proj(); d0.wiresByKv = { '0,4':[{ mark:'СИП', h_m:7 }] }; d0.decideParams = { reserveT_m:15 };
+    DC.propose(d0);
+    eq(d0.poles.filter(function(p){ return p.design.sleeve; }).length, 0, 'муфт нет');
+    eq(DC.check(d0).some(function(x){ return x.lv === 'stop' && /Муфты и запасы кабеля не назначены/.test(x.text); }), true, 'требуется указать');
+    var id = d0.poles[0].id;
+    DC.setSleeve(d0, id, true, { type:'разветвительная' });
+    var p0 = d0.poles.filter(function(x){ return x.id === id; })[0];
+    eq(p0.design.sleeve, true, 'назначена'); eq(p0.design.node, 'С', 'узел'); eq(p0.design.reserve_m, 15, 'запас'); eq(p0.design.by, 'проектировщик', 'ручное');
+    DC.propose(d0);
+    eq(d0.poles.filter(function(x){ return x.id === id; })[0].design.sleeve, true, 'сохранена при пересчёте');
+    DC.setSleeve(d0, id, false);
+    eq(d0.poles.filter(function(x){ return x.id === id; })[0].design.sleeve, false, 'снята');
+    return 'ручное назначение';
+  });
+  t('Муфты: автоматический режим расставляет их сам', function(){
+    var d0 = window.PDRD_DEMO.build();
+    d0.poles.forEach(function(p){ if (p.design) { p.design.sleeve = false; p.design.by = 'авто'; } });
+    d0.decideParams.sleeveMode = 'auto';
+    DC.propose(d0);
+    eq(d0.poles.filter(function(p){ return p.design.sleeve; }).length > 0, true);
+    return d0.poles.filter(function(p){ return p.design.sleeve; }).length + ' муфт';
+  });
   t('Решения: муфты на смежных промежуточных опорах — блок (ТТ № 282р)', function(){
     var o = function(o){ o.poles = [
       { line:'Л', num:'1', kv:'0,4', mark:'П8-1', lat:45, lon:38, span:'30', nextRef:'2' },
@@ -557,6 +580,15 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     var bad = PDRD_AUDIT.run(demo).filter(function(x){ return x.lv === 'stop' && /Пролёт/.test(x.text); });
     eq(bad.length, 0); return 'нарушений пролётов без мероприятий нет';
   });
+  t('Длина трассы: учитываются пролёты по ссылкам «пред.» и «след.»', function(){
+    var d0 = DM.build();
+    var byNum = {}; d0.poles.forEach(function(p){ (p.fromReport || []).forEach(function(r){ byNum[r.line_id + '|' + r.num] = r; }); });
+    var full = PDRD_SPEC.lengths(d0).route_m;
+    /* убираем ссылку «след.» у одной опоры — пролёт должен сохраниться по обратной ссылке */
+    Object.keys(byNum).some(function(k){ var r = byNum[k]; if (r.next && r.span_next_m) { r.next = ''; return true; } return false; });
+    eq(PDRD_SPEC.lengths(d0).route_m, full, 'длина не потеряна');
+    return full + ' м';
+  });
   t('Спецификация: кабель ≥ трассы × k + запасы, бирки = узлы', function(){
     var sp = PDRD_SPEC.build(demo), L = sp.lengths;
     eq(L.total_m >= Math.floor(L.route_m * 1.02 + L.reserves_m), true, 'длина');
@@ -571,12 +603,55 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     near(km * 1000, sp.lengths.route_m, 1, 'км трассы');
     return b.length + ' позиций';
   });
-  t('Чертежи: все листы с рамкой, штампом и номерами', function(){
+  t('Чертежи: рамка, штамп, утверждающий, номера листов', function(){
     var sh = PDRD_SVG.sheets(demo);
     eq(sh.length >= 8, true, 'листов');
     sh.forEach(function(s, i){ eq(s.meta.num, i + 1, 'номер'); if (!s.p.some(function(e){ return e.l === 'ШТАМП'; })) throw new Error('нет штампа на листе ' + (i + 1)); });
+    eq(sh[0].p.some(function(e){ return e.t === 'text' && /Чепусов/.test(e.s); }), true, 'утверждающий в штампе');
+    eq(sh[0].p.some(function(e){ return e.t === 'text' && e.s === 'Утв.'; }), true, 'строка «Утв.»');
     var svg = PDRD_SVG.toSvg(sh[0]); eq(/^<svg[\s\S]*<\/svg>$/.test(svg), true, 'SVG');
     return sh.length + ' листов';
+  });
+  t('Чертежи: ничего не выходит за рамку, шрифт не мельче 2,5 мм', function(){
+    var sh = PDRD_SVG.sheets(demo), W = PDRD_SVG.W, H = PDRD_SVG.H;
+    sh.forEach(function(s){
+      s.p.forEach(function(e){
+        if (e.t === 'text' && e.h < 2.49) throw new Error('лист ' + s.meta.num + ': шрифт ' + e.h + ' мм');
+        if (e.l === 'ШТАМП' || e.l === 'РАМКА') return;   /* графы поля подшивки — вне рамки по ГОСТ */
+        var b = PDRD_SVG.bbox([e]); if (!b) return;
+        if (b.x < 4.9 || b.y < 4.4 || b.x + b.w > W - 4.9 || b.y + b.h > H - 4.4) throw new Error('лист ' + s.meta.num + ': за рамкой (' + (e.s || e.t) + ')');
+      });
+    });
+    return 'проверено ' + sh.length + ' листов';
+  });
+  t('Чертежи: примечания — над штампом справа снизу', function(){
+    var sh = PDRD_SVG.sheets(demo).filter(function(s){ return s.notes.length; })[0];
+    eq(!!sh, true, 'есть лист с примечаниями');
+    var n = sh.p.filter(function(e){ return e.t === 'text' && e.s === 'Примечания:'; })[0];
+    eq(!!n, true, 'заголовок примечаний');
+    eq(n.x >= PDRD_SVG.W - 5 - 185 - 0.1, true, 'справа');
+    eq(n.y > PDRD_SVG.H / 2, true, 'снизу');
+    return 'блок примечаний на месте';
+  });
+  t('Чертежи: заполнение листа не менее 70 % (схемы и таблицы)', function(){
+    var sh = PDRD_SVG.sheets(demo).filter(function(s){ return s.meta.kind !== 'plan'; });
+    sh.forEach(function(s){ if ((s.meta.fill || 0) < 70) throw new Error('лист ' + s.meta.num + ': заполнение ' + s.meta.fill + ' %'); });
+    return sh.length + ' листов ≥ 70 %';
+  });
+  t('Чертежи: анкерные опоры показаны с подкосами', function(){
+    var route = PDRD_SVG.sheets(demo).filter(function(s){ return s.meta.kind === 'route'; })[0];
+    eq(!!route, true, 'лист размещения');
+    var diag = route.p.filter(function(e){ return e.t === 'line' && e.l === 'ВЛ_ОПОРЫ' && Math.abs(e.x2 - e.x1) > 0.5 && Math.abs(e.y2 - e.y1) > 0.5; });
+    eq(diag.length > 0, true, 'подкосы есть');
+    return diag.length + ' подкосов';
+  });
+  t('Ситуационный план: координатная сетка и масштаб', function(){
+    var pl = PDRD_SVG.sheets(demo).filter(function(s){ return s.meta.kind === 'plan'; })[0];
+    eq(!!pl.meta.scale, true, 'масштаб');
+    eq(pl.p.some(function(e){ return e.t === 'text' && /°/.test(e.s); }), true, 'подписи координат');
+    eq(pl.p.some(function(e){ return e.t === 'line' && e.dash; }), true, 'линии сетки');
+    eq(pl.notes.some(function(n){ return /WGS-84/.test(n); }), true, 'система координат в примечаниях');
+    return 'М 1:' + pl.meta.scale;
   });
   t('DXF R12: заголовок, кодировка, слои, объекты', function(){
     var sh = PDRD_SVG.sheets(demo)[0], txt = PDRD_DXF.toDxf(sh), pr = PDRD_DXF.parse(txt);

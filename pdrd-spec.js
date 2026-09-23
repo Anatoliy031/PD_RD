@@ -35,20 +35,28 @@ function specParams(d) {
   };
 }
 
+/* Пролёты, по которым проходит кабель. Граф линии строится по ссылкам
+   «пред.» и «след.» без учёта направления обхода — в отчёте оно различается
+   на разных участках, иначе часть пролётов теряется и длина занижается. */
 function cableSpans(d) {
-  var byKey = {}, out = [], seen = {};
+  var byKey = {}, out = [], seen = {}, lineOff = {};
+  (d.lines || []).forEach(function (l) { if (l.cable === false) lineOff[l.id] = 1; });
   d.poles.forEach(function (p) { (p.fromReport || []).forEach(function (r) { byKey[r.line_id + '|' + r.num] = { p: p, r: r }; }); });
   d.poles.forEach(function (p) {
     (p.fromReport || []).forEach(function (r) {
-      var nx = r.next && byKey[r.line_id + '|' + r.next];
-      var L = num(r.span_next_m);
-      if (!nx || !L) return;
-      var k = [r.line_id, r.num, r.next].join('|');
-      if (seen[k]) return; seen[k] = 1;
-      var a = (p.design || {}).decision, b = (nx.p.design || {}).decision;
-      var line = (d.lines || []).filter(function (l) { return l.id === r.line_id; })[0];
-      if (line && line.cable === false) return;
-      if (INCL.indexOf(a) >= 0 && INCL.indexOf(b) >= 0) out.push({ line: r.line_id, from: p, to: nx.p, fromNum: r.num, toNum: r.next, L: L });
+      if (lineOff[r.line_id]) return;
+      [[r.next, num(r.span_next_m)], [r.prev, num(r.span_prev_m)]].forEach(function (e) {
+        var n = e[0], L = e[1];
+        if (!n || !L) return;
+        var q = byKey[r.line_id + '|' + n];
+        if (!q || q.p === p) return;
+        var k = r.line_id + '|' + (r.num < n ? r.num + '|' + n : n + '|' + r.num);
+        if (seen[k]) return;
+        var a = (p.design || {}).decision, b = (q.p.design || {}).decision;
+        if (INCL.indexOf(a) < 0 || INCL.indexOf(b) < 0) return;
+        seen[k] = 1;
+        out.push({ line: r.line_id, from: p, to: q.p, fromNum: r.num, toNum: n, L: L });
+      });
     });
   });
   return out;
@@ -63,8 +71,11 @@ function lengths(d) {
   var r = C.cableLength({ spansSum: sum, sagFactor: sp.sagFactor, reserves: reserves, splicing: splicing, emergencyShare: sp.emergencyShare });
   var total = Math.ceil(r.value);
   var builds = sp.buildLength_m ? Math.ceil(total / sp.buildLength_m) : null;
+  var declared = num(d.lengthKm) !== null ? num(d.lengthKm) * 1000 : null;
+  var short = declared !== null && sum < declared * 0.98 ? declared - sum : 0;
+  if (short) r.trace.push('Протяжённость трассы по перечню пролётов (' + (sum / 1000).toFixed(3).replace('.', ',') + ' км) меньше заявленной в исходных данных (' + (declared / 1000).toFixed(3).replace('.', ',') + ' км) на ' + Math.round(short) + ' м: проверьте ссылки «пред./след.» и пролёты в отчёте, решения по опорам и перечень линий в трассе.');
   return { spans: spans, route_m: sum, total_m: total, trace: r.trace, sleeves: sleeves.length, reserves_m: reserves,
-           buildLengths: builds, eku: sleeves.length + 1, params: sp };
+           buildLengths: builds, eku: sleeves.length + 1, params: sp, declared_m: declared, short_m: short };
 }
 
 function build(d) {

@@ -293,6 +293,7 @@ function dataFromProject(d, tpl) {
     'ОПЕРАТОР_НАИМ': p.operator, 'ПОДРЯДЧИК_НАИМ': p.contractor,
     'ЗАКАЗЧИК_НАИМ': p.designCustomer,
     'ГИП_ФИО': s.gip, 'РАЗРАБ_ФИО': s.razrab, 'ПРОВ_ФИО': s.prov, 'НКОНТР_ФИО': s.nkontr,
+    'УТВ_ФИО': s.approver, 'УТВ_ДОЛЖН': s.approverPost,
     'ДАТА_ВЫПУСКА_КР': kr(p.releaseDate), 'ГОД_ВЫПУСКА': p.releaseDate ? p.releaseDate.slice(0, 4) : '',
     'СРО_НАИМ': l.sro.name, 'СРО_РЕГ_НОМЕР': l.sro.regNumber, 'СРО_ВЫПИСКА_ДАТА': ru(l.sro.extractDate),
     'ТЗ_НОМЕР': b.tz.number, 'ТЗ_ДАТА': ru(b.tz.date), 'ТЗ_НАИМ': b.tz.title || '',

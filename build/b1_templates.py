@@ -16,7 +16,7 @@ import os, sys, zipfile, datetime
 from xml.sax.saxutils import escape
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VERSION = '1.0.1'
+VERSION = '1.1.0'
 
 MM = 56.6929  # twips в мм
 def tw(mm): return int(round(mm * MM))
@@ -128,7 +128,7 @@ def form5():
     rows.append(row(5, left_cells() + [cell(120, '{{ОБОЗНАЧЕНИЕ}}', span=4, vmerge='restart', sz=28, b=True)]))
     rows.append(row(5, left_cells() + [cell(120, '', span=4, vmerge='cont')]))
     rows.append(row(5, left_cells(HDR) + [cell(120, '', span=4, vmerge='cont')]))
-    roles = [('Разраб.', '{{РАЗРАБ_ФИО}}'), ('Пров.', '{{ПРОВ_ФИО}}'), ('', ''), ('Н. контр.', '{{НКОНТР_ФИО}}'), ('ГИП', '{{ГИП_ФИО}}')]
+    roles = [('Разраб.', '{{РАЗРАБ_ФИО}}'), ('Пров.', '{{ПРОВ_ФИО}}'), ('Утв.', '{{УТВ_ФИО}}'), ('Н. контр.', '{{НКОНТР_ФИО}}'), ('ГИП', '{{ГИП_ФИО}}')]
     for k, (role, fio) in enumerate(roles):
         c = [cell(20, role, span=2, sz=14, align='left'), cell(20, fio, span=2, sz=14, align='left'),
              cell(15, '', sz=14), cell(10, '{{ДАТА_ВЫПУСКА_КР}}' if fio else '', sz=12)]
@@ -238,6 +238,11 @@ def note(t): return para(t, 'Hint')       # подсказка для проек
 
 def title_page(vol_title, pd=True, stage=None):
     out = [
+        para('УТВЕРЖДАЮ', 'TitleRight', align='right'),
+        para('{{УТВ_ДОЛЖН}}', 'TitleRight', align='right'),
+        para('_______________ {{УТВ_ФИО}}', 'TitleRight', align='right'),
+        para('«____» _______________ {{ГОД_ВЫПУСКА}} г.', 'TitleRight', align='right'),
+        para('', 'Body', after=600),
         para('{{ВЛАДЕЛЕЦ_НАИМ}}', 'TitleSmall', align='center'),
         para('{{ОРГАНИЗАЦИЯ}}', 'TitleSmall', align='center'),
         para('Выписка из реестра членов СРО: {{СРО_НАИМ}}, рег. № {{СРО_РЕГ_НОМЕР}} от {{СРО_ВЫПИСКА_ДАТА}}', 'TitleSmall', align='center'),
@@ -588,6 +593,7 @@ def styles_xml():
             + st('TOC2', 'toc 2', f'<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="{tw(172)}"/></w:tabs><w:spacing w:after="40"/><w:ind w:left="284"/>', nxt='Body')
             + st('Marker', 'PD Поле-заполнитель', '<w:spacing w:before="60" w:after="60"/>', '<w:color w:val="1F5F99"/><w:sz w:val="20"/><w:shd w:val="clear" w:color="auto" w:fill="E7EFF7"/>')
             + st('Hint', 'PD Подсказка', '<w:spacing w:after="60"/><w:ind w:left="709"/>', '<w:i/><w:color w:val="8A5A00"/><w:sz w:val="20"/>')
+            + st('TitleRight', 'PD Титул утверждаю', '<w:spacing w:after="40"/><w:ind w:left="5100"/><w:jc w:val="right"/>', '<w:sz w:val="22"/>')
             + st('TitleSmall', 'PD Титул', '<w:spacing w:after="60"/><w:jc w:val="center"/>', '<w:sz w:val="24"/>')
             + st('TitleObject', 'PD Титул объект', '<w:spacing w:after="120"/><w:jc w:val="center"/>', '<w:b/><w:sz w:val="32"/>')
             + st('TitleStage', 'PD Титул стадия', '<w:spacing w:after="120"/><w:jc w:val="center"/>', '<w:b/><w:caps/><w:sz w:val="36"/>')
