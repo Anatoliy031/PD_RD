@@ -9,8 +9,8 @@
 'use strict';
 var W = 420, H = 297, FL = 20, FO = 5;
 var STAMP_W = 185, STAMP_H = 55;
+var NOTE_W = STAMP_W;      // блок примечаний — строго над основной надписью
 var FILL_MIN = 0.70;
-var NOTE_W = 250;          // ширина блока примечаний над основной надписью, мм
 var LAYERS = ['РАМКА', 'ШТАМП', 'ВЛ_ОПОРЫ', 'ВЛ_ПРОВОДА', 'ВОЛС', 'МУФТЫ', 'РАЗМЕРЫ', 'ТЕКСТ', 'ПЕРЕСЕЧЕНИЯ', 'ПОДЛОЖКА',
               'КАРТА_ДОРОГИ', 'КАРТА_ЗДАНИЯ', 'КАРТА_ВОДА', 'КАРТА_ЖД', 'КАРТА_УГОДЬЯ', 'КАРТА_ПОДПИСИ'];
 var COLORS = { 'РАМКА': '#000', 'ШТАМП': '#000', 'ВЛ_ОПОРЫ': '#222', 'ВЛ_ПРОВОДА': '#6f6f6f', 'ВОЛС': '#0a58a8', 'МУФТЫ': '#b02a1f', 'РАЗМЕРЫ': '#444', 'ТЕКСТ': '#000', 'ПЕРЕСЕЧЕНИЯ': '#7a4d00', 'ПОДЛОЖКА': '#888',
@@ -64,6 +64,9 @@ function notesHeight(sh) {
 }
 function drawNotes(sh) {
   if (!sh.notes.length) return;
+  /* блок не должен подниматься выше рабочего поля: лишние строки убираются */
+  var maxH = H - FO - STAMP_H - (FO + 8);
+  while (sh.notes.length > 1 && notesHeight(sh) > maxH) sh.notes.pop();
   var x = W - FO - 5 - NOTE_W, top = H - FO - STAMP_H - notesHeight(sh) + 2;
   var y = top;
   sh.text(x, y, 'Примечания:', FS.small, { b: true });
@@ -215,7 +218,6 @@ function poleSymbol(sh, x, yTop, yBase, scheme, layer) {
   var d = hgt * 0.42, top = yTop + hgt * 0.28;
   if (/концев/.test(s)) sh.line(x, top, x - d, yBase, layer, 0.5);
   else if (/анкер|ответвит/.test(s)) { sh.line(x, top, x - d, yBase, layer, 0.5); sh.line(x, top, x + d, yBase, layer, 0.5); }
-  else if (/углов/.test(s)) sh.line(x - d * 0.6, yTop + hgt * 0.16, x + d * 0.6, yTop + hgt * 0.16, layer, 0.4);
   sh.line(x - hgt * 0.18, yBase, x + hgt * 0.18, yBase, layer, 0.5);
 }
 function schemeOf(p) { var R = global.PDRD_REFS_V25, ref = R ? R.poleByMark(p.mark) : null; return ref ? ref.sch : ''; }
@@ -252,7 +254,7 @@ function planSheets(d) {
   var u0 = d.mapUnderlay;
   var und = u0 && u0.nw && u0.se && (u0.dataUrl || (u0.tiles && u0.tiles.length)) ? u0 : null;
   var out = [];
-  var Z = { x0: FL + 5, y0: FO + 5, x1: W - FO - 5, y1: H - FO - STAMP_H - 38 };
+  var Z = { x0: FL + 5, y0: FO + 5, x1: W - FO - 5, y1: H - FO - STAMP_H - 56 };
 
   function rotator(rot) {
     var c = Math.cos(rot), s = Math.sin(rot);
@@ -308,8 +310,8 @@ function planSheets(d) {
     if (vec && vec.features && vec.features.length) {
       var nDrawn = drawVector(sh, vec.features, function (la, lo) { return XYm(pr.x(lo), pr.y(la)); }, Z, sc);
       if (nDrawn) {
-        sh.note('Топографическая основа — данные OpenStreetMap (© OpenStreetMap contributors, ODbL): улицы и дороги с названиями, здания с номерами домов, водотоки, водоёмы, железные дороги. Основа векторная, выгружается в PDF и DXF на слоях КАРТА_*.');
-        if (sc > 2500) sh.note('Номера домов печатаются на фрагментах масштаба 1:2500 и крупнее.');
+        sh.note('Топооснова — OpenStreetMap (© OpenStreetMap contributors, ODbL): улицы, дома с номерами, водотоки, железные дороги; слои КАРТА_* выгружаются в PDF и DXF.');
+        
       }
     }
     var inv = rotator(-rot), ctr = inv(cx, cy);
@@ -366,10 +368,9 @@ function planSheets(d) {
       var x = rx * c + ry * s, y = -rx * s + ry * c;
       return [pr.lat(y), pr.lon(x)];
     }
-    sh.note('Система координат — WGS-84. Углы рабочего поля: левый верхний ' + dms(c1[0]) + ' с. ш., ' + dms(c1[1]) + ' в. д.; правый нижний ' + dms(c2[0]) + ' с. ш., ' + dms(c2[1]) + ' в. д. Сетка — параллели и меридианы с подписями.');
-    if (rot) sh.note('План развёрнут для размещения трассы вдоль листа: направление на север — по стрелке.');
-    sh.note('Обозначения: тонкая линия — существующая ВЛ; утолщённая — проектируемая ВОЛС; точка — опора; треугольник — муфта и запас; окружность — опора, исключённая или с размещением после восстановления владельцем.');
-    if (Math.max(f.w, f.h) < FILL_MIN) sh.note('Заполнение листа ограничено принятым стандартным масштабом ' + 'М 1:' + sc + ' и конфигурацией участка трассы.');
+    sh.note('Координаты — WGS-84; сетка — параллели и меридианы. Углы поля: ' + dms(c1[0]) + ' с. ш., ' + dms(c1[1]) + ' в. д. — ' + dms(c2[0]) + ' с. ш., ' + dms(c2[1]) + ' в. д.');
+    if (rot) sh.note('План развёрнут вдоль листа: север — по стрелке.');
+    sh.note('Обозначения: тонкая линия — ВЛ; утолщённая — проектируемая ВОЛС; точка — опора; треугольник — муфта и запас; окружность — опора с размещением после замены владельцем.');
     if (und) sh.note('Подложка: ' + (und.name || 'растр') + ', привязана по координатам углов; в архив DXF прикладываются растр и файл привязки .jgw.');
     else if (!vec) sh.note('Подложка не задана (страница «Чертежи»). Трасса передаётся также файлом KMZ для просмотра на картографической основе.');
   }
@@ -786,29 +787,31 @@ function montageSheets(d) {
     var spans = s.spans.slice(0, 10), temps = [];
     for (var t = Math.ceil(inp.tMin / 10) * 10; t <= inp.tMax; t += 10) temps.push(t);
     var mt = C.montageTable(inp.cab, ld, sol, spans.map(function (x) { return x.L; }), temps[0], temps[temps.length - 1], 10);
-    var need = rowH * (spans.length + 3) + 8;
+    var nRows = spans.length + 2;
+    var need = rowH * nRows + 12;
     if (!sh || y + need > maxY) { sh = new Sheet({ kind: 'montage', title: 'Монтажные таблицы стрел провеса и тяжений' }); out.push(sh); y = 0; }
-    sh.text(0, y, s.id + ' — ' + clip(s.line, 150, FS.text) + '; приведённый пролёт ' + fm(s.Lr, 1) + ' м', FS.text, { b: true });
-    y += rowH + 1;
-    var tblW = w0 + temps.length * colW;
-    sh.rect(0, y - rowH + 1.2, tblW, rowH * (spans.length + 2), 'РАЗМЕРЫ', 0.3);
-    sh.text(1, y, 'Пролёт / температура, °C', FS.small, { max: w0 - 2 });
-    temps.forEach(function (tv, i2) { sh.text(w0 + i2 * colW + colW / 2, y, String(tv), FS.small, { a: 'middle' }); });
-    sh.line(0, y + 1.5, tblW, y + 1.5, 'РАЗМЕРЫ', 0.3);
-    y += rowH;
-    sh.text(1, y, 'Тяжение H, кН', FS.small, { max: w0 - 2 });
-    mt.forEach(function (r, i3) { sh.text(w0 + i3 * colW + colW / 2, y, fm(r.H / 1000, 3), FS.small, { a: 'middle' }); });
-    y += rowH;
-    spans.forEach(function (sp, k) {
-      sh.text(1, y, clip(sp.from.rec.num + '–' + sp.to.rec.num + ' (' + fm(sp.L, 0) + ' м)', w0 - 2, FS.small), FS.small);
-      mt.forEach(function (r, i4) { sh.text(w0 + i4 * colW + colW / 2, y, fm(r.sags[k], 2), FS.small, { a: 'middle' }); });
-      y += rowH;
-    });
-    for (var c2 = 0; c2 <= temps.length; c2++) {
-      var xx = w0 + c2 * colW - (c2 === 0 ? 0 : 0);
-      sh.line(c2 === 0 ? w0 : xx, y - rowH * (spans.length + 2) - 1.3, c2 === 0 ? w0 : xx, y - 1.3, 'РАЗМЕРЫ', 0.2);
+    sh.text(0, y + FS.text, s.id + ' — ' + clip(s.line, 150, FS.text) + '; приведённый пролёт ' + fm(s.Lr, 1) + ' м', FS.text, { b: true });
+    var y0 = y + FS.text + 2.5, tblW = w0 + temps.length * colW;
+    /* сетка таблицы: внешняя рамка и разделители по одной геометрии */
+    sh.rect(0, y0, tblW, rowH * nRows, 'РАЗМЕРЫ', 0.4);
+    for (var r2 = 1; r2 < nRows; r2++) sh.line(0, y0 + r2 * rowH, tblW, y0 + r2 * rowH, 'РАЗМЕРЫ', 0.2);
+    for (var c3 = 0; c3 <= temps.length; c3++) {
+      var xg = w0 + c3 * colW - (c3 === 0 ? colW : 0);
+      if (c3 === 0) xg = w0;
+      sh.line(xg, y0, xg, y0 + rowH * nRows, 'РАЗМЕРЫ', c3 === 0 ? 0.4 : 0.2);
     }
-    if (s.spans.length > spans.length) { sh.text(1, y, 'Ещё ' + (s.spans.length - spans.length) + ' пролётов участка — в ведомости пролётов (XLSX)', FS.small); y += rowH; }
+    var base = y0 + rowH * 0.72;
+    sh.text(1.2, base, 'Пролёт / температура, °C', FS.small, { max: w0 - 2.4 });
+    temps.forEach(function (tv, i2) { sh.text(w0 + i2 * colW + colW / 2, base, String(tv), FS.small, { a: 'middle', max: colW - 2 }); });
+    sh.text(1.2, base + rowH, 'Тяжение H, кН', FS.small, { max: w0 - 2.4 });
+    mt.forEach(function (r3, i3) { sh.text(w0 + i3 * colW + colW / 2, base + rowH, fm(r3.H / 1000, 3), FS.small, { a: 'middle', max: colW - 2 }); });
+    spans.forEach(function (sp, k) {
+      var yy = base + rowH * (k + 2);
+      sh.text(1.2, yy, clip(sp.from.rec.num + '–' + sp.to.rec.num + ' (' + fm(sp.L, 0) + ' м), стрела f, м', w0 - 2.4, FS.small), FS.small);
+      mt.forEach(function (r4, i4) { sh.text(w0 + i4 * colW + colW / 2, yy, fm(r4.sags[k], 2), FS.small, { a: 'middle', max: colW - 2 }); });
+    });
+    y = y0 + rowH * nRows + 3;
+    if (s.spans.length > spans.length) { sh.text(1.2, y + FS.small, 'Ещё ' + (s.spans.length - spans.length) + ' пролётов участка — в ведомости пролётов (XLSX)', FS.small); y += FS.small + 2; }
     y += 6;
   });
   out.forEach(function (x) {

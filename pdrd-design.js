@@ -137,7 +137,7 @@ function run(d) {
   var calc = C(), norms = N(), R_ = R();
   var inp = inputs(d);
   var res = { at: new Date().toISOString(), inputs: inp, sections: [], poles: [], spans: [], classes: {},
-              summary: { ok: 0, exceed: 0, blocked: 0, excluded: 0 }, missing: {} };
+              summary: { ok: 0, exceed: 0, blocked: 0, excluded: 0, replace: 0 }, missing: {} };
   function addMiss(text, where) { (res.missing[text] = res.missing[text] || []).push(where); }
   inp.miss.forEach(function (m) { addMiss(m.text, 'проект'); });
 
@@ -212,8 +212,10 @@ function run(d) {
                 status: 'blocked', reasons: [], warns: [] };
     var k = stateK(p.state || '');
     if (k === null || recs.some(function (x) { return /нет|отсутств/i.test(x.tech_possibility || ''); })) {
-      row.status = 'excluded'; row.reasons.push('нет технологической возможности (' + (p.state || 'по отчёту') + ') — размещение не проектируется');
-      res.poles.push(row); res.summary.excluded++; return;
+      /* опора аварийная или без технологической возможности: расчёт выполняется
+         для новой опоры той же марки, размещение — после её замены владельцем */
+      row.replace = true; k = 1;
+      row.warns.push('установка после замены опоры: расчёт выполнен для новой опоры той же марки (состояние существующей — ' + (p.state || 'по отчёту') + ')');
     }
     if (!ref) { row.reasons.push('марка «' + (p.mark || '—') + '» отсутствует в справочнике'); addMiss('Марка опоры в справочнике', p.mark || row.nums); res.poles.push(row); res.summary.blocked++; return; }
     row.scheme = ref.sch; row.mAdm = ref.m_adm;
@@ -279,6 +281,7 @@ function run(d) {
     /* габаритный пролёт */
     var over = recs.filter(function (x) { return num(x.span_next_m) !== null && ref.lgab && num(x.span_next_m) > ref.lgab; });
     if (over.length) row.warns.push('пролёт ' + over.map(function (x) { return x.span_next_m; }).join(', ') + ' м больше габаритного ' + ref.lgab + ' м — развилка: полный расчёт / промежуточная опора (Е.1) / обход');
+    if (row.replace) res.summary.replace = (res.summary.replace || 0) + 1;
     res.summary[row.status === 'ok' ? 'ok' : row.status]++;
     res.poles.push(row);
   });
@@ -289,7 +292,7 @@ function run(d) {
 function store(d, res) {
   res = res || run(d);
   d.calcResult = { at: res.at, app: global.PDRD ? global.PDRD.VERSION : '', summary: res.summary,
-    poles: res.poles.map(function (x) { return { id: x.id, status: x.status, reasons: x.reasons, warns: x.warns, M: x.M, Madm: x.Madm }; }),
+    poles: res.poles.map(function (x) { return { id: x.id, status: x.status, reasons: x.reasons, warns: x.warns, M: x.M, Madm: x.Madm, replace: !!x.replace, scheme: x.scheme }; }),
     sections: res.sections.map(function (s) { return { id: s.id, line: s.line, kv: s.kv, status: s.status, Lr: s.Lr, length: s.length, H0: s.solution ? s.solution.H0 : null, fVert: s.fVert, reasons: s.reasons }; }),
     spans: res.spans.map(function (s) { return { section: s.section, line: s.line, from: s.from, to: s.to, L: s.L, status: s.status, clearance: s.clearance, wireDist: s.wireDist, fmax: s.fmax, reasons: s.reasons }; }),
     missing: res.missing };

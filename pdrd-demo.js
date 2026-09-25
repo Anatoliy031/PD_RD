@@ -60,6 +60,27 @@ function build() {
   d.poleCapacity = { 'КА8-1': { m_cap_knm: 60 }, 'А8-1': { m_cap_knm: 60 }, 'ОА8-1': { m_cap_knm: 60 }, 'А10-1': { m_cap_knm: 110 }, 'УА10-1': { m_cap_knm: 110 } };
   d.decideParams = { buildLength_m: 2000, reserveT_m: 15, dampersFromSpan_m: 70, sleeveMode: 'manual' };
   d.metrology = global.PDRD_TEXTS.defaultMetrology(d);
+  /* ДЕМО: каталог изделий (марки вымышленные) */
+  d.specCatalog = {
+    clamp_susp: { type: 'ДЕМО-ЗПС-10', maker: 'ДЕМО-Арматура' },
+    node_susp: { type: 'ДЕМО-УК-П', maker: 'ДЕМО-Арматура' },
+    clamp_tens: { type: 'ДЕМО-ЗНС-10', maker: 'ДЕМО-Арматура' },
+    node_tens: { type: 'ДЕМО-УК-Н', maker: 'ДЕМО-Арматура' },
+    turnbuckle: { type: 'ДЕМО-ТР-12', maker: 'ДЕМО-Арматура' },
+    link: { type: 'ДЕМО-ПР-7', maker: 'ДЕМО-Арматура' },
+    band: { type: 'ДЕМО-ЛК-20', maker: 'ДЕМО-Арматура' },
+    buckle: { type: 'ДЕМО-СК-20', maker: 'ДЕМО-Арматура' },
+    sleeve_holder: { type: 'ДЕМО-КМ-1', maker: 'ДЕМО-Арматура' },
+    reserve_holder: { type: 'ДЕМО-КЗ-1', maker: 'ДЕМО-Арматура' },
+    tag: { type: 'ДЕМО-БМ', maker: 'ДЕМО-Арматура' },
+    strut: { type: 'ДЕМО-ПОДКОС-СВ95', maker: 'по типовому проекту' },
+    pole_extra: { type: 'ДЕМО-П8-1', maker: 'по типовому проекту' },
+    'sleeve_прямая': { type: 'ДЕМО-МОГ-П', maker: 'ДЕМО-Связь' },
+    'sleeve_разветвительная': { type: 'ДЕМО-МОГ-Р', maker: 'ДЕМО-Связь' },
+    damper: { type: 'ДЕМО-ГВ-1', maker: 'ДЕМО-Арматура' },
+    protector: { type: 'ДЕМО-ПС-1', maker: 'ДЕМО-Арматура' },
+    sign: { type: 'ДЕМО-ЗН', maker: 'ДЕМО-Связь' }
+  };
   d.demo = true;
   global.PDRD_DESIGN.solve(d);
   /* ДЕМО: муфты назначены «заказчиком» на двух опорах */

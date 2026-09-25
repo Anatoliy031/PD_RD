@@ -457,10 +457,10 @@ if (DS && IM) {
     eq(s.length, 1, 'участков'); eq(s[0].spans.length, 3, 'пролётов'); near(s[0].Lr, 50, 1e-9);
     return '1 участок из 3 пролётов, направления обхода разные';
   });
-  t('Расчёт проекта: без исходных данных всё заблокировано, аварийные исключены', function(){
+  t('Расчёт проекта: без исходных данных всё заблокировано, аварийная — под замену', function(){
     var r0 = IM.toProject(IM.fromV25Object(v25()), P.blank());
     var res2 = DS.run(r0.project);
-    eq(res2.summary.ok, 0, 'обоснованных'); eq(res2.summary.excluded, 1, 'исключённых');
+    eq(res2.summary.ok, 0, 'обоснованных'); eq(res2.summary.replace, 1, 'опор под замену');
     eq(Object.keys(res2.missing).length > 0, true, 'перечень данных');
     return res2.summary.blocked + ' заблокировано';
   });
@@ -589,12 +589,70 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     eq(PDRD_SPEC.lengths(d0).route_m, full, 'длина не потеряна');
     return full + ' м';
   });
+  t('Справочник филиала: добавленные опоры и кабели доступны расчёту', function(){
+    var R = window.PDRD_REFS_V25;
+    eq(!!R.poleByMark('УА23'), true, 'УА23'); eq(!!R.poleByMark('П10/0,38'), true, 'совместная опора');
+    eq(R.poleByMark('А23').m_adm, 20, 'допустимый момент'); eq(R.poleByMark('ПР1').lgab, 70, 'габаритный пролёт');
+    eq(!!R.cableByMark('ОКМС-32'), true, 'кабель из справочника');
+    eq(R.branchAdded.poles >= 15, true, 'опоры филиала добавлены');
+    return R.branchAdded.poles + ' опор, ' + R.branchAdded.cables + ' кабелей';
+  });
+  t('Аварийная опора: расчёт на новую опору и «установка после замены»', function(){
+    var r = demo.calcResult.poles.filter(function(p){ return p.replace; });
+    eq(r.length > 0, true, 'есть опоры под замену');
+    eq(r.every(function(p){ return typeof p.M === 'number' && p.M > 0; }), true, 'момент посчитан');
+    eq(r.every(function(p){ return p.status !== 'excluded'; }), true, 'опора не исключается');
+    var dd = PDRD_DOCX.dataFromProject(demo, PDRD_DOCX.TEMPLATES.filter(function(x){ return x.code === 'ТКР'; })[0]);
+    eq(dd.tables['НАГРУЗКИ'].rows.some(function(x){ return /установка после замены/.test(x[4]); }), true, 'отметка в ведомости нагрузок');
+    return r.length + ' опор';
+  });
+  t('Спецификация: узлы, талрепы, звенья, лента и скрепы', function(){
+    var sp = PDRD_SPEC.build(demo), by = {};
+    sp.items.forEach(function(x){ by[x.key] = x; });
+    var t2 = PDRD_DECIDE.totals(demo);
+    eq(by.node_susp.qty, t2.nodes['П'] || 0, 'узлы поддерживающие = зажимы поддерживающие');
+    eq(by.clamp_susp.qty, by.node_susp.qty, 'зажим и узел работают в паре');
+    eq(!!by.turnbuckle && by.turnbuckle.qty > 0, true, 'талрепы');
+    eq(!!by.link && by.link.qty === by.turnbuckle.qty, true, 'промежуточные звенья');
+    eq(!!by.node_tens && by.node_tens.qty === by.clamp_tens.qty, true, 'натяжные узлы');
+    eq(!!by.band && by.band.qty > 0, true, 'лента крепёжная');
+    eq(by.buckle.qty, sp.brackets * PDRD_SPEC.specParams(demo).bucklesPerBracket, 'скрепы по кронштейнам');
+    eq(!!by.sleeve_holder && !!by.reserve_holder, true, 'устройства для муфты и запаса');
+    return sp.items.length + ' позиций';
+  });
+  t('Спецификация: тип и марка берутся из каталога проекта', function(){
+    var d0 = window.PDRD_DEMO.build();
+    eq(PDRD_SPEC.build(d0).needType, 0, 'в демо марки заполнены');
+    d0.specCatalog.turnbuckle = {};
+    eq(PDRD_SPEC.build(d0).needType > 0, true, 'пустая марка выявляется');
+    eq(PDRD_AUDIT.run(d0).some(function(x){ return x.lv === 'stop' && /тип и марка/.test(x.text); }), true, 'выпуск заблокирован');
+    return 'каталог проверяется';
+  });
+  t('Одностоечная опора с муфтой усиливается подкосом', function(){
+    var t2 = PDRD_DECIDE.totals(demo);
+    eq(t2.reinforce > 0, true, 'усиление предусмотрено');
+    var sp = PDRD_SPEC.build(demo);
+    eq(sp.items.some(function(x){ return x.key === 'strut' && x.qty === t2.reinforce; }), true, 'подкос в спецификации');
+    eq(PDRD_SPEC.bor(demo, sp).some(function(x){ return /подкос/i.test(x.name); }), true, 'работа в ВОР');
+    var dd = PDRD_DOCX.dataFromProject(demo, PDRD_DOCX.TEMPLATES[0]);
+    eq(dd.tables['Е1'].rows.some(function(x){ return /подкос/i.test(x[1]); }), true, 'мероприятие Е.1');
+    return t2.reinforce + ' опор';
+  });
+  t('Ведомость пролётов заполняется', function(){
+    var dd = PDRD_DOCX.dataFromProject(demo, PDRD_DOCX.TEMPLATES.filter(function(x){ return x.code === 'ЛКС'; })[0]);
+    eq(dd.tables['ПРОЛЁТЫ'].rows.length > 0, true, 'строки есть');
+    var d0 = window.PDRD_DEMO.build();
+    d0.calcResult.spans = [];
+    var dd2 = PDRD_DOCX.dataFromProject(d0, PDRD_DOCX.TEMPLATES.filter(function(x){ return x.code === 'ЛКС'; })[0]);
+    eq(dd2.tables['ПРОЛЁТЫ'].rows.length > 0, true, 'при отсутствии расчёта выводятся пролёты трассы');
+    return dd.tables['ПРОЛЁТЫ'].rows.length + ' пролётов';
+  });
   t('Спецификация: кабель ≥ трассы × k + запасы, бирки = узлы', function(){
     var sp = PDRD_SPEC.build(demo), L = sp.lengths;
     eq(L.total_m >= Math.floor(L.route_m * 1.02 + L.reserves_m), true, 'длина');
     var nodes = Object.keys(sp.totals.nodes).reduce(function(a, k){ return a + sp.totals.nodes[k]; }, 0);
-    eq(sp.items.filter(function(x){ return /Бирка/.test(x.name); })[0].qty, nodes, 'бирки');
-    eq(sp.items.filter(function(x){ return /Зажим натяжной/.test(x.name); })[0].qty, 2 * (sp.totals.nodes['А2'] || 0) + (sp.totals.nodes['А1'] || 0) + 3 * (sp.totals.nodes['АО'] || 0) + 2 * (sp.totals.nodes['С'] || 0), 'натяжные');
+    eq(sp.items.filter(function(x){ return x.key === 'tag'; })[0].qty, nodes, 'бирки');
+    eq(sp.items.filter(function(x){ return x.key === 'clamp_tens'; })[0].qty, 2 * (sp.totals.nodes['А2'] || 0) + (sp.totals.nodes['А1'] || 0) + 3 * (sp.totals.nodes['АО'] || 0) + 2 * (sp.totals.nodes['С'] || 0), 'натяжные');
     return L.total_m + ' м кабеля';
   });
   t('ВОР согласована со спецификацией', function(){

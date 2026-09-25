@@ -9,7 +9,7 @@
 
 var DECISIONS = [
   { id: 'place',     title: 'Размещать', short: 'размещать' },
-  { id: 'after',     title: 'Размещать после восстановления опоры владельцем', short: 'после восстановления' },
+  { id: 'after',     title: 'Размещать после замены (восстановления) опоры владельцем', short: 'после замены' },
   { id: 'extra',     title: 'Установить промежуточную опору (Е.1, по согласованию с владельцем)', short: 'доп. опора (Е.1)' },
   { id: 'recheck',   title: 'Размещать после поверочного расчёта по типовому проекту', short: 'после поверочного расчёта' },
   { id: 'bypass',    title: 'Обход участка (кабель по опоре не проходит)', short: 'обход' },
@@ -175,6 +175,7 @@ function propose(d, opt) {
   fixSpans(d, info, opt);
   if (prm.sleeveMode === 'auto') placeSleeves(d, info, prm);
   else keepSleeves(d, prm);
+  reinforceSleevePoles(d, info);
   placeDampers(d, info, prm);
   return out;
 }
@@ -240,6 +241,19 @@ function placeSleeves(d, info, prm) {
   }
 }
 
+/* Одностоечная опора с муфтой и запасом кабеля усиливается подкосом (подпором):
+   дополнительный вес и внецентренная нагрузка на стойку без подкоса. */
+function reinforceSleevePoles(d, info) {
+  d.poles.forEach(function (p) {
+    var x = p.design; if (!x) return;
+    var inf = info[p.id];
+    var single = inf && !inf.anchor;            /* анкерные и ответвительные уже с подкосами */
+    x.reinforce = !!(x.sleeve && single && ['place', 'recheck', 'extra', 'after'].indexOf(x.decision) >= 0);
+    if (x.reinforce && !(x.why || []).some(function (w) { return /подкос/.test(w); }))
+      (x.why = x.why || []).push('одностоечная опора с муфтой и запасом кабеля — предусмотрено усиление подкосом (подпором), мероприятие Е.1');
+  });
+}
+
 /* Гасители вибрации: по паспорту кабеля — с какой длины пролёта требуются */
 function placeDampers(d, info, prm) {
   if (!prm.dampersFromSpan_m) return;
@@ -297,7 +311,7 @@ function title(id, short) { var x = DECISIONS.filter(function (z) { return z.id 
 
 /* Сводные количества для спецификации */
 function totals(d) {
-  var t = { place: 0, after: 0, extra: 0, recheck: 0, bypass: 0, exclude: 0, sleeves: 0, reserves_m: 0, dampers: 0, nodes: {} };
+  var t = { place: 0, after: 0, extra: 0, recheck: 0, bypass: 0, exclude: 0, sleeves: 0, reserves_m: 0, dampers: 0, reinforce: 0, nodes: {} };
   d.poles.forEach(function (p) {
     var x = p.design || {};
     if (x.decision) t[x.decision] = (t[x.decision] || 0) + 1;
@@ -305,6 +319,7 @@ function totals(d) {
       t.nodes[x.node] = (t.nodes[x.node] || 0) + 1;
       if (x.sleeve) { t.sleeves++; t.reserves_m += num(x.reserve_m) || 0; }
       if (x.dampers) t.dampers++;
+      if (x.reinforce) t.reinforce++;
     }
   });
   return t;
@@ -329,9 +344,10 @@ function setSleeve(d, poleId, on, opt) {
     var inf = poleInfo(d)[poleId];
     p.design.node = nodeFor(inf);
   }
+  reinforceSleevePoles(d, poleInfo(d));
   return p;
 }
 
-global.PDRD_DECIDE = { DECISIONS: DECISIONS, NODES: NODES, params: params, setSleeve: setSleeve, poleInfo: poleInfo, heightWindow: heightWindow,
+global.PDRD_DECIDE = { DECISIONS: DECISIONS, NODES: NODES, params: params, setSleeve: setSleeve, reinforceSleevePoles: reinforceSleevePoles, poleInfo: poleInfo, heightWindow: heightWindow,
   propose: propose, check: check, totals: totals, title: title };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -331,14 +331,19 @@ function dataFromProject(d, tpl) {
   if (cr) {
     var STN = { ok: 'обосновано', exceed: 'не выполнено', blocked: 'нет данных', excluded: 'исключена' };
     var f2 = function (v, k) { return v === null || v === undefined ? '—' : String(Math.round(v * Math.pow(10, k)) / Math.pow(10, k)).replace('.', ','); };
+    var spanRows = cr.spans && cr.spans.length ? null : (global.PDRD_SPEC ? global.PDRD_SPEC.cableSpans(d) : []);
     tables['ПРОЛЁТЫ'] = { caption: 'Таблица — Результаты расчёта пролётов (габарит до земли — не менее 5,0 м, ТТ № 282р, п. 3.2.4)',
       cols: [{ t: 'Участок', w: 16 }, { t: 'Пролёт', w: 30 }, { t: 'L, м', w: 14 }, { t: 'Стрела наиб., м', w: 20 }, { t: 'До земли, м', w: 18 }, { t: 'До провода, м', w: 18 }, { t: 'Результат', w: 22 }, { t: 'Примечание', w: 37 }],
-      rows: cr.spans.map(function (s) { return [s.section, s.from + ' — ' + s.to, f2(s.L, 1), f2(s.fmax, 2), f2(s.clearance, 2), f2(s.wireDist, 2), STN[s.status], (s.reasons || []).join('; ')]; }) };
+      rows: (cr.spans && cr.spans.length
+        ? cr.spans.map(function (s) { return [s.section, s.from + ' — ' + s.to, f2(s.L, 1), f2(s.fmax, 2), f2(s.clearance, 2), f2(s.wireDist, 2), STN[s.status], (s.reasons || []).join('; ')]; })
+        : (spanRows || []).map(function (s) { return ['—', s.fromNum + ' — ' + s.toNum, f2(s.L, 1), '—', '—', '—', 'нет данных', 'расчёт пролёта не выполнен: ' + (s.line || '')]; })) };
     tables['НАГРУЗКИ'] = { caption: 'Таблица — Проверка несущей способности опор',
       cols: [{ t: '№ опоры', w: 22 }, { t: 'Марка', w: 18 }, { t: 'M, кН·м', w: 18 }, { t: 'Mдоп, кН·м', w: 18 }, { t: 'Результат', w: 22 }, { t: 'Примечание', w: 77 }],
       rows: cr.poles.map(function (p2) {
         var pole = d.poles.filter(function (x) { return x.id === p2.id; })[0] || {};
-        return [(pole.lines || []).map(function (l) { return l.num; }).join(' / '), pole.mark || '', f2(p2.M / 1000, 2), f2(p2.Madm / 1000, 2), STN[p2.status], (p2.reasons || []).join('; ')];
+        var note = (p2.replace ? 'Установка после замены опоры; расчёт выполнен для новой опоры. ' : '') + (p2.reasons || []).concat(p2.warns || []).join('; ');
+        return [(pole.lines || []).map(function (l) { return l.num; }).join(' / '), pole.mark || '', f2(p2.M / 1000, 2), f2(p2.Madm / 1000, 2),
+                (p2.replace ? 'установка после замены' : STN[p2.status]), note];
       }) };
     var sm = cr.summary;
     blocks['ВЫВОД_ПО_ОПОРАМ'] = ['По результатам расчёта (программа PD_RD ' + (cr.app || '') + ', ' + ru(cr.at) + '): размещение обосновано на ' + sm.ok + ' опорах; нормы не выполняются на ' + sm.exceed + ' опорах; для ' + sm.blocked + ' опор расчёт не завершён из-за отсутствия исходных данных; ' + sm.excluded + ' опор исключены из размещения по результатам обследования.' +
@@ -378,6 +383,8 @@ function dataFromProject(d, tpl) {
       var nums = (p.lines || []).map(function (l) { return l.num; }).join(' / ') + ' (' + p.mark + ')';
       if (p.design.decision === 'extra') e1.push([nums, 'Установка дополнительной промежуточной опоры (по согласованию с владельцем инфраструктуры)', (p.design.why || []).join('; '), 'пользователь инфраструктуры']);
       if (p.design.decision === 'recheck') e1.push([nums, 'Поверочный расчёт несущей способности по типовому проекту', (p.design.why || []).join('; '), 'пользователь инфраструктуры']);
+      if (p.design.reinforce) e1.push([nums, 'Усиление одностоечной опоры подкосом (подпором) в месте установки муфты и запаса кабеля', 'муфта и запас кабеля на одностоечной опоре', 'пользователь инфраструктуры']);
+      if (p.design.decision === 'after') e1.push([nums, 'Размещение после замены опоры; расчёт выполнен для новой опоры той же марки', (p.state || 'состояние по отчёту п. 13'), 'замена опоры — владелец инфраструктуры; размещение — пользователь']);
     });
     tables['Е1'] = { caption: 'Таблица — Мероприятия, обусловленные размещением (Е.1)',
       cols: [{ t: 'Опора', w: 30 }, { t: 'Мероприятие', w: 65 }, { t: 'Основание', w: 50 }, { t: 'Исполнитель', w: 30 }],

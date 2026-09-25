@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Паспорт проекта — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.4.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.5.0">
 <style>
 .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px 14px}
 .frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
@@ -46,11 +46,11 @@ td input,td textarea{width:100%;min-width:70px;padding:5px 6px;border:1px solid 
   </section>
 </main>
 <div class="bar"><button class="btn primary" id="bSave" type="button">Сохранить паспорт</button><span id="msg"></span></div>
-<script src="pdrd-core.js?v=1.4.0"></script>
-<script src="pdrd-norms.js?v=1.4.0"></script>
-<script src="pdrd-profiles.js?v=1.4.0"></script>
-<script src="pdrd-marks.js?v=1.4.0"></script>
-<script src="pdrd-texts.js?v=1.4.0"></script>
+<script src="pdrd-core.js?v=1.5.0"></script>
+<script src="pdrd-norms.js?v=1.5.0"></script>
+<script src="pdrd-profiles.js?v=1.5.0"></script>
+<script src="pdrd-marks.js?v=1.5.0"></script>
+<script src="pdrd-texts.js?v=1.5.0"></script>
 <script>
 (function(){
   var P = PDRD, $ = function(id){ return document.getElementById(id); };
@@ -100,6 +100,8 @@ td input,td textarea{width:100%;min-width:70px;padding:5px 6px;border:1px solid 
       ['specParams.sagFactor','Коэффициент на провис и отходы','num',{hint:'По умолчанию 1,02; подтверждается проектировщиком'}],
       ['specParams.reservesPerSleeve','Запасов на муфту, шт.','num',{hint:'По умолчанию 2 (по одному на каждый ввод)'}],
       ['specParams.splicingPerEnd_m','Разделка на ввод, м','num'],
+      ['specParams.bandPerBracket_m','Лента крепёжная на кронштейн, м','num',{hint:'По умолчанию 1,2 м'}],
+      ['specParams.bucklesPerBracket','Скреп на кронштейн, шт.','num',{hint:'По умолчанию 2'}],
       ['posParams.kmPerDay','Подвеска, км в рабочий день','num'], ['posParams.sleevesPerDay','Муфт в рабочий день','num'], ['posParams.prepDays','Подготовительные работы, р. д.','num']]]
   ];
   var host = $('forms');
@@ -160,6 +162,6 @@ td input,td textarea{width:100%;min-width:70px;padding:5px 6px;border:1px solid 
   };
 })();
 </script>
-<script src="pdrd-nav.js?v=1.4.0"></script>
+<script src="pdrd-nav.js?v=1.5.0"></script>
 </body>
 </html>

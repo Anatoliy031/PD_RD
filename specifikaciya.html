@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Спецификация — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.4.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.5.0">
 <style>
 .tbl{overflow-x:auto;margin-top:8px}
 table{border-collapse:collapse;width:100%;font-size:13.5px}
@@ -35,25 +35,31 @@ td.n{text-align:right;white-space:nowrap}
     </div>
     <div id="msg"></div>
   </section>
-  <section class="panel"><h2>Спецификация оборудования, изделий и материалов</h2><p class="sub">ГОСТ 21.110-2013</p><div class="tbl"><table id="tSpec"></table></div></section>
+  <section class="panel">
+    <h2>Спецификация оборудования, изделий и материалов</h2>
+    <p class="sub">ГОСТ 21.110-2013. Тип и марку изделия, код и завод-изготовитель заполняет проектировщик по утверждённому каталогу — значения сохраняются в проекте и попадают в тома и ведомости. Незаполненные марки блокируют выпуск.</p>
+    <div id="specMsg"></div>
+    <div class="tbl"><table id="tSpec"></table></div>
+  </section>
   <section class="panel"><h2>Ведомость объёмов работ</h2><div class="tbl"><table id="tBor"></table></div></section>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="pdrd-core.js?v=1.4.0"></script>
-<script src="pdrd-norms.js?v=1.4.0"></script>
-<script src="pdrd-profiles.js?v=1.4.0"></script>
-<script src="pdrd-marks.js?v=1.4.0"></script>
-<script src="pdrd-refs-v25.js?v=1.4.0"></script>
-<script src="pdrd-calc.js?v=1.4.0"></script>
-<script src="pdrd-design.js?v=1.4.0"></script>
-<script src="pdrd-decide.js?v=1.4.0"></script>
-<script src="pdrd-spec.js?v=1.4.0"></script>
-<script src="pdrd-texts.js?v=1.4.0"></script>
-<script src="pdrd-docx.js?v=1.4.0"></script>
-<script src="pdrd-svg.js?v=1.4.0"></script>
-<script src="pdrd-xlsx.js?v=1.4.0"></script>
-<script src="pdrd-kmz.js?v=1.4.0"></script>
+<script src="pdrd-core.js?v=1.5.0"></script>
+<script src="pdrd-norms.js?v=1.5.0"></script>
+<script src="pdrd-profiles.js?v=1.5.0"></script>
+<script src="pdrd-marks.js?v=1.5.0"></script>
+<script src="pdrd-refs-v25.js?v=1.5.0"></script>
+<script src="pdrd-refs.js?v=1.5.0"></script>
+<script src="pdrd-calc.js?v=1.5.0"></script>
+<script src="pdrd-design.js?v=1.5.0"></script>
+<script src="pdrd-decide.js?v=1.5.0"></script>
+<script src="pdrd-spec.js?v=1.5.0"></script>
+<script src="pdrd-texts.js?v=1.5.0"></script>
+<script src="pdrd-docx.js?v=1.5.0"></script>
+<script src="pdrd-svg.js?v=1.5.0"></script>
+<script src="pdrd-xlsx.js?v=1.5.0"></script>
+<script src="pdrd-kmz.js?v=1.5.0"></script>
 <script>
 (function(){
   var $ = function(id){ return document.getElementById(id); };
@@ -69,7 +75,43 @@ td.n{text-align:right;white-space:nowrap}
     var t = $(id), tr = el('tr'); head.forEach(function(h){ tr.appendChild(el('th','',h)); }); var th = el('thead'); th.appendChild(tr); t.appendChild(th);
     var tb = el('tbody'); rows.forEach(function(r){ var x = el('tr'); r.forEach(function(v, i){ x.appendChild(el('td', typeof v === 'number' ? 'n' : '', typeof v === 'number' ? String(v).replace('.', ',') : v)); }); tb.appendChild(x); }); t.appendChild(tb);
   }
-  table('tSpec', ['Поз.','Наименование','Тип, марка','Ед.','Кол.','Масса, кг','Примечание'], sp.items.map(function(x){ return [x.pos, x.name, x.type, x.unit, x.qty, x.mass === '' ? '' : x.mass, x.note]; }));
+  specTable();
+  function specTable(){
+    sp = PDRD_SPEC.build(d);
+    var t = $('tSpec'); t.innerHTML = '';
+    var head = el('tr'); ['Поз.','Наименование и техническая характеристика','Тип, марка','Код','Завод-изготовитель','Ед.','Кол.','Масса ед., кг','Примечание'].forEach(function(h){ head.appendChild(el('th','',h)); });
+    var th = el('thead'); th.appendChild(head); t.appendChild(th);
+    var tb = el('tbody');
+    d.specCatalog = d.specCatalog || {};
+    sp.items.forEach(function(x){
+      var tr = el('tr');
+      tr.appendChild(el('td','', x.pos));
+      tr.appendChild(el('td','', x.name));
+      ['type','code','maker'].forEach(function(f){
+        var td = el('td'), i = el('input'); i.value = x[f] || '';
+        i.setAttribute('aria-label', f + ' ' + x.name);
+        i.style.cssText = 'width:100%;min-width:90px;padding:5px 6px;border:1px solid ' + (f === 'type' && !x.type ? '#E3B0B0' : 'var(--line-s)') + ';border-radius:4px;font-size:13.5px';
+        i.onchange = function(){
+          var c = d.specCatalog[x.key] = d.specCatalog[x.key] || {};
+          c[f] = i.value.trim();
+          PDRD.replaceAll(d); d = PDRD.load(); specTable(); stats();
+        };
+        td.appendChild(i); tr.appendChild(td);
+      });
+      tr.appendChild(el('td','', x.unit));
+      tr.appendChild(el('td','n', String(x.qty).replace('.', ',')));
+      tr.appendChild(el('td','n', x.mass === '' ? '' : String(x.mass)));
+      tr.appendChild(el('td','', x.note));
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb);
+    stats();
+  }
+  function stats(){
+    var need = sp.items.filter(function(x){ return !x.type; }).length;
+    var m = $('specMsg'); m.innerHTML = '';
+    m.appendChild(el('div','msg ' + (need ? 'bad' : 'ok'), need ? 'Не указаны тип и марка для ' + need + ' позиций — выпуск заблокирован.' : 'Тип и марка указаны для всех позиций.'));
+  }
   table('tBor', ['№','Работа','Ед.','Кол.','Примечание'], PDRD_SPEC.bor(d, sp).map(function(x){ return [x.pos, x.name, x.unit, x.qty, x.note]; }));
   $('bXlsx').onclick = function(){
     try { var r = PDRD_XLSX.toArray(d); save(r.data, (d.passport.shifr || 'PD_RD').replace(/[^\w\-]+/g,'_') + '-vedomosti.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); $('msg').textContent = 'Листов в книге: ' + (r.sheets + 1); }
@@ -78,6 +120,6 @@ td.n{text-align:right;white-space:nowrap}
   $('bKmz').onclick = function(){ PDRD_KMZ.kmz(d).then(function(b){ save(b, (d.passport.shifr || 'PD_RD').replace(/[^\w\-]+/g,'_') + '-trassa.kmz', 'application/vnd.google-earth.kmz'); }); };
 })();
 </script>
-<script src="pdrd-nav.js?v=1.4.0"></script>
+<script src="pdrd-nav.js?v=1.5.0"></script>
 </body>
 </html>
