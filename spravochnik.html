@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Справочник — PD_RD</title>
+<link rel="stylesheet" href="pdrd-ui.css?v=1.6.0">
+<style>
+.tbl{overflow-x:auto;margin-top:8px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{border-bottom:1px solid var(--line-s);padding:5px 7px;text-align:left;vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:12.5px}
+td.n{text-align:right;white-space:nowrap}
+td.miss{background:#FFF4F4;color:var(--bad)}
+.tag{font-size:11.5px;padding:1px 7px;border-radius:999px;background:var(--blue-l);color:var(--blue-d);white-space:nowrap}
+details{border-top:1px solid var(--line-s);padding:8px 0}
+details summary{cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div><b>ПД и РД ВОЛС на ВЛ</b><br><span>Филиал ПАО «Россети Юг» — «Кубаньэнерго», ДРНУ</span></div>
+  <nav aria-label="Разделы" id="nav"></nav>
+</div></header>
+<main class="wrap">
+  <section class="panel">
+    <h2>Справочник филиала</h2>
+    <p class="sub">Опоры, стойки, несущая способность анкерных опор, кабели и провода. Загрузите таблицу филиала (ODS, XLSX, XLS) — программа найдёт блоки по заголовкам колонок, как в файле «Справочник.ods». Справочник хранится в этом браузере и действует для всех проектов; при совпадении марки значение филиала заменяет справочник АРМ ППО.</p>
+    <div class="btns">
+      <label class="btn primary" for="fRef">Загрузить справочник</label>
+      <input type="file" id="fRef" accept=".ods,.xlsx,.xls,.csv" hidden>
+      <button class="btn" id="bTpl" type="button">Скачать шаблон с недостающими данными</button>
+      <button class="btn danger" id="bClear" type="button">Сбросить загруженный справочник</button>
+    </div>
+    <div id="msg"></div>
+  </section>
+  <section class="panel">
+    <h2>Что нужно для расчёта опоры</h2>
+    <div id="need"></div>
+  </section>
+  <section class="panel" id="tables"></section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="pdrd-core.js?v=1.6.0"></script>
+<script src="pdrd-refs-v25.js?v=1.6.0"></script>
+<script src="pdrd-refs.js?v=1.6.0"></script>
+<script src="pdrd-refs-io.js?v=1.6.0"></script>
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function msg(cls, t){ var m = $('msg'); m.innerHTML = ''; m.appendChild(el('div','msg '+cls,t)); }
+  var R = PDRD_REFS, V = PDRD_REFS_V25;
+  function nf(v){ return v === null || v === undefined || v === '' ? '' : String(v).replace('.', ','); }
+
+  function needList(){
+    var host = $('need'); host.innerHTML = '';
+    var ul = el('ul','gaps');
+    [['Из справочника опор (есть)', 'марка, стойка, схема, допустимый момент стойки, высота подвеса, габаритный пролёт'],
+     ['Геометрия стойки', 'ширина по фасаду и высота над землёй (или длина и заглубление) — для ветровой нагрузки на опору (ПУЭ-7, пп. 2.5.59–2.5.63)'],
+     ['Несущая способность конструкции', 'для анкерных, угловых анкерных, концевых и ответвительных опор с подкосами, кН·м — по типовому проекту; момент одиночной стойки для них не применяется'],
+     ['Провода ВЛ по классам (данные владельца)', 'марка и число проводов, высота подвеса, тяжение, наибольшая стрела; диаметр и масса подставляются из справочника по марке'],
+     ['Кабель (паспорт)', 'марка — диаметр, масса и допустимое тяжение берутся из справочника; жёсткость EA и ТКЛР — из паспорта изготовителя'],
+     ['Климат и проект', 'высшая, низшая и среднегодовая температуры (СП 131.13330.2020), высота подвеса кабеля']
+    ].forEach(function(x){ var li = el('li'); li.appendChild(el('b','', x[0] + ': ')); li.appendChild(document.createTextNode(x[1])); ul.appendChild(li); });
+    host.appendChild(ul);
+    /* какие стойки и анкерные опоры ещё без данных */
+    var stMiss = {}, capMiss = [];
+    V.POLES.forEach(function(p){ if (p.st && !R.standOf(p.st)) stMiss[p.st] = 1; });
+    R.POLES.forEach(function(p){ if (/анкер|концев|ответвит/.test(p.sch || '') && !R.capacityOf(p.mark)) capMiss.push(p.mark); });
+    var box = el('div','msg warn');
+    box.appendChild(el('div','', 'Без геометрии в справочнике: стоек — ' + Object.keys(stMiss).length + (Object.keys(stMiss).length ? ' (' + Object.keys(stMiss).slice(0, 12).join(', ') + (Object.keys(stMiss).length > 12 ? '…' : '') + ')' : '') + '.'));
+    box.appendChild(el('div','', 'Без несущей способности конструкции: анкерных опор филиала — ' + capMiss.length + (capMiss.length ? ' (' + capMiss.join(', ') + ')' : '') + '.'));
+    box.appendChild(el('div','', 'Скачайте шаблон — в нём эти строки уже подготовлены, заполните и загрузите файл обратно. Значения можно также ввести на странице «Расчёты» для конкретного проекта.'));
+    host.appendChild(box);
+  }
+
+  function table(title, cols, rows, src){
+    var d = el('details'); d.open = rows.length <= 40;
+    d.appendChild(el('summary','', title + ' — ' + rows.length));
+    var w = el('div','tbl'), t = el('table'), tr = el('tr');
+    cols.forEach(function(c){ tr.appendChild(el('th','',c[0])); });
+    if (src) tr.appendChild(el('th','','Источник'));
+    var th = el('thead'); th.appendChild(tr); t.appendChild(th);
+    var tb = el('tbody');
+    rows.forEach(function(r){
+      var x = el('tr');
+      cols.forEach(function(c){ var v = r[c[1]]; var td = el('td', (c[2] ? 'n' : '') + ((v === null || v === undefined || v === '') && c[3] ? ' miss' : ''), c[2] ? nf(v) : (v || '')); x.appendChild(td); });
+      if (src) { var td = el('td'); td.appendChild(el('span','tag', src(r))); x.appendChild(td); }
+      tb.appendChild(x);
+    });
+    t.appendChild(tb); w.appendChild(t); d.appendChild(w); return d;
+  }
+  function render(){
+    var host = $('tables'); host.innerHTML = '';
+    host.appendChild(el('h2','','Содержимое справочника'));
+    var branch = {}; R.POLES.forEach(function(p){ branch[p.mark] = 1; });
+    host.appendChild(table('Опоры', [['кВ','kv'],['Марка','mark'],['Тип','type'],['Типовой проект','proj'],['Стойка','st'],['Схема','sch'],['Mдоп стойки, кН·м','m_adm',1],['Высота подвеса, м','h',1],['Габ. пролёт, м','lgab',1]],
+      V.POLES, function(p){ return branch[p.mark] ? 'филиал' : 'АРМ ППО'; }));
+    var st = {}; V.POLES.forEach(function(p){ if (p.st) st[p.st] = 1; });
+    host.appendChild(table('Стойки', [['Стойка','st'],['Ширина по фасаду, м','width_m',1,1],['Длина, м','length_m',1],['Заглубление, м','embed_m',1],['Высота над землёй, м','height_m',1]],
+      Object.keys(st).sort().map(function(s){ return Object.assign({ st: s }, R.standOf(s) || {}); })));
+    host.appendChild(table('Несущая способность анкерных опор', [['Марка опоры','mark'],['Схема','sch'],['Типовой проект','proj'],['Несущая способность, кН·м','m_cap_knm',1,1]],
+      V.POLES.filter(function(p){ return /анкер|концев|ответвит/.test(p.sch || ''); }).map(function(p){ var c = R.capacityOf(p.mark) || {}; return { mark: p.mark, sch: p.sch, proj: p.proj, m_cap_knm: c.m_cap_knm }; })));
+    host.appendChild(table('Кабели ВОЛС', [['Марка','mark'],['Тип','type'],['d, мм','d',1],['Масса, кг/км','m',1],['Допустимое тяжение, кН','t',1],['EA, кН','EA_kn',1],['ТКЛР ×10⁻⁶','alpha_e6',1],['Область, кВ','kv']], V.CABLES));
+    host.appendChild(table('Провода', [['Марка','mark'],['d, мм','d',1],['Масса, кг/км','m',1],['Вид','kind']], V.WIRES));
+    needList();
+  }
+
+  $('fRef').onchange = function(ev){
+    var f = ev.target.files[0]; ev.target.value = '';
+    if (!f) return;
+    f.arrayBuffer().then(function(buf){
+      var wb = XLSX.read(buf, { type: 'array' });
+      var all = { poles: [], cables: [], wires: [], stands: [], capacity: [] };
+      wb.SheetNames.forEach(function(n){
+        var aoa = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' });
+        var r = PDRD_REFS_IO.parse(aoa);
+        Object.keys(all).forEach(function(k){ all[k] = all[k].concat(r[k]); });
+      });
+      var cur = R.loadCustom() || {};
+      Object.keys(all).forEach(function(k){
+        var map = {};
+        (cur[k] || []).concat(all[k]).forEach(function(x){ map[R.normKey(x.mark || x.st)] = Object.assign({}, map[R.normKey(x.mark || x.st)] || {}, x); });
+        cur[k] = Object.keys(map).map(function(key){ return map[key]; });
+      });
+      cur.source = f.name;
+      R.saveCustom(cur);
+      msg('ok','Загружено из «' + f.name + '»: опор ' + all.poles.length + ', стоек ' + all.stands.length + ', несущих способностей ' + all.capacity.length + ', кабелей ' + all.cables.length + ', проводов ' + all.wires.length + '. Выполните расчёт заново на странице «Расчёты».');
+      render();
+    }).catch(function(e){ msg('bad','Файл не прочитан: ' + e.message); });
+  };
+  $('bTpl').onclick = function(){
+    var wb = PDRD_REFS_IO.template({ POLES: V.POLES, STANDS: R.STANDS, CAPACITY: R.CAPACITY, CABLES: V.CABLES, WIRES: V.WIRES });
+    PDRD.download(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), 'Spravochnik_PD_RD.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  };
+  $('bClear').onclick = function(){
+    if (!confirm('Удалить загруженный справочник из браузера? Встроенный справочник филиала и АРМ ППО останутся.')) return;
+    try { localStorage.removeItem(R.KEY); } catch(e){}
+    location.reload();
+  };
+  var c = R.loadCustom();
+  if (c) msg('ok','Загруженный справочник: «' + (c.source || 'файл') + '» от ' + new Date(c.saved).toLocaleString('ru-RU') + '.');
+  render();
+})();
+</script>
+<script src="pdrd-nav.js?v=1.6.0"></script>
+</body>
+</html>

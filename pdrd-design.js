@@ -25,7 +25,13 @@ function inputs(d) {
     if (num(cl[k]) === null) miss.push({ key: 'climate.' + k, text: { tMax: 'Высшая температура', tMin: 'Низшая температура', tAvg: 'Среднегодовая температура' }[k] + ' (СП 131.13330.2020)' });
   });
   if (!cl.confirmed) warn.push('Климатические условия не подтверждены проектировщиком');
-  var cb = d.cable || {};
+  var cb = Object.assign({}, d.cable || {});
+  var RFc = global.PDRD_REFS ? global.PDRD_REFS.cableOf(cb.mark) : null;
+  if (RFc) {
+    if (num(cb.d_mm) === null) cb.d_mm = RFc.d;
+    if (num(cb.mass_kg_km) === null) cb.mass_kg_km = RFc.m;
+    if (num(cb.t_mdrn_kn) === null && num(cb.t_allow_kn) === null) cb.t_allow_kn = RFc.t;
+  }
   var cab = { d_mm: num(cb.d_mm), mass_kg_km: num(cb.mass_kg_km), EA: num(cb.EA_kn) ? num(cb.EA_kn) * 1000 : null,
               alpha: num(cb.alpha_e6) ? num(cb.alpha_e6) * 1e-6 : null,
               T_max: num(cb.t_mdrn_kn) ? num(cb.t_mdrn_kn) * 1000 : (num(cb.t_allow_kn) ? num(cb.t_allow_kn) * 1000 : null),
@@ -107,6 +113,24 @@ function sections(d) {
     s.length = s.spans.reduce(function (a, x) { return a + x.L; }, 0);
   });
   return out;
+}
+
+/* Геометрия стойки: из проекта, иначе из справочника (ширина по фасаду,
+   длина стойки и заглубление → высота над землёй) */
+function standGeom(d, st) {
+  var own = (d.stands || {})[st];
+  if (own && num(own.width_m) && num(own.height_m)) return own;
+  var RF = global.PDRD_REFS, s = RF ? RF.standOf(st) : null;
+  if (!s) return null;
+  var w = num(s.width_m), hAbove = num(s.height_m);
+  if (hAbove === null && num(s.length_m) !== null && num(s.embed_m) !== null) hAbove = num(s.length_m) - num(s.embed_m);
+  return w && hAbove ? { width_m: w, height_m: hAbove, cx: num(s.cx) || undefined, source: 'справочник' } : null;
+}
+/* Провод: недостающие диаметр и масса — из справочника по марке */
+function wireFull(w) {
+  var RF = global.PDRD_REFS, r = RF ? RF.wireOf(w.mark) : null;
+  if (!r) return w;
+  return Object.assign({}, w, { d_mm: num(w.d_mm) !== null ? w.d_mm : r.d, mass_kg_km: num(w.mass_kg_km) !== null ? w.mass_kg_km : r.m });
 }
 
 /* Угол поворота линии по координатам соседних опор, градусы (0 — прямая) */
@@ -219,15 +243,17 @@ function run(d) {
     }
     if (!ref) { row.reasons.push('марка «' + (p.mark || '—') + '» отсутствует в справочнике'); addMiss('Марка опоры в справочнике', p.mark || row.nums); res.poles.push(row); res.summary.blocked++; return; }
     row.scheme = ref.sch; row.mAdm = ref.m_adm;
-    var stand = (d.stands || {})[ref.st] || null;
-    if (!stand) addMiss('Геометрия стойки ' + ref.st + ' (ширина, высота над землёй)', ref.st);
+    var RF = global.PDRD_REFS;
+    var stand = standGeom(d, ref.st);
+    if (!stand) addMiss('Геометрия стойки ' + ref.st + ' (ширина по фасаду, высота над землёй) — «Справочник» → «Стойки» или «Расчёты»', ref.st);
     var items = [], blocked = [];
     recs.forEach(function (rec) {
       var ws = ((num(rec.span_prev_m) || 0) + (num(rec.span_next_m) || 0)) / 2;
       if (!ws) blocked.push('пролёты у опоры ' + rec.num + ' не определены');
       var wires = wiresFor(d, rec.line_id, rec.kv);
       if (!wires.length) { blocked.push('провода линии ' + rec.line_id.slice(0, 30) + ' не заданы'); addMiss('Провода ВЛ ' + kvKey(rec.kv) + ' кВ (марка, число, диаметр, масса, высота, тяжение)', rec.line_id); }
-      wires.forEach(function (w) {
+      wires.forEach(function (w0) {
+        var w = wireFull(w0);
         var h = num(w.h_m) !== null ? num(w.h_m) : (ref.h || null);
         if (num(w.h_m) === null) row.warns.push(w.mark + ': высота подвеса принята по справочнику (' + ref.h + ' м)');
         try {
@@ -262,10 +288,12 @@ function run(d) {
     }
     try {
       var struts = /анкер|концев|ответвит/.test(ref.sch);
-      var cap = struts ? num(((d.poleCapacity || {})[p.mark] || {}).m_cap_knm) : ref.m_adm;
+      var capProj = num(((d.poleCapacity || {})[p.mark] || {}).m_cap_knm);
+      var capRef = RF && RF.capacityOf(p.mark) ? num(RF.capacityOf(p.mark).m_cap_knm) : null;
+      var cap = struts ? (capProj !== null ? capProj : capRef) : ref.m_adm;
       if (struts && cap === null) {
         blocked.push('опора с подкосом/оттяжкой: допустимый момент конструкции в направлении тяжения не задан (типовой проект ' + ref.proj + ')');
-        addMiss('Несущая способность анкерных, концевых и ответвительных опор по типовым проектам (кН·м)', p.mark);
+        addMiss('Несущая способность конструкции анкерных, угловых анкерных, концевых и ответвительных опор, кН·м — «Справочник» → «Несущая способность» или «Расчёты»', p.mark);
       }
       var pm = calc.poleMoment({ mark: p.mark, scheme: ref.sch, m_adm: cap === null ? ref.m_adm : cap, kState: k, angle: angle, windSpan: 1,
                                  stand: stand }, items, { W0: inp.W0, terrain: inp.terrain });
@@ -310,5 +338,5 @@ function solve(d, opt) {
   return res;
 }
 
-global.PDRD_DESIGN = { inputs: inputs, sections: sections, run: run, wiresFor: wiresFor, store: store, solve: solve };
+global.PDRD_DESIGN = { standGeom: standGeom, wireFull: wireFull, inputs: inputs, sections: sections, run: run, wiresFor: wiresFor, store: store, solve: solve };
 })(typeof window !== 'undefined' ? window : globalThis);

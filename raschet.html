@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Расчёты — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.5.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.6.0">
 <style>
 .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 14px}
 .frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
@@ -63,7 +63,7 @@ small.r{display:block;color:var(--muted);font-size:12px}
 
   <section class="panel">
     <h2>Опоры: стойки и несущая способность</h2>
-    <p class="sub">Размеры стоек нужны для ветровой нагрузки на опору (ПУЭ-7, пп. 2.5.59–2.5.63). Для анкерных, концевых и ответвительных опор с подкосами — допустимый момент конструкции в направлении тяжения по типовому проекту.</p>
+    <p class="sub">Размеры стоек нужны для ветровой нагрузки на опору (ПУЭ-7, пп. 2.5.59–2.5.63). Для анкерных, угловых анкерных, концевых и ответвительных опор с подкосами — допустимый момент конструкции в направлении тяжения по типовому проекту. Пустое поле — берётся значение из «Справочника» (показано серым); если и там нет — расчёт опоры не выполняется.</p>
     <div class="tbl"><table><thead><tr><th>Стойка</th><th>Опор</th><th>Ширина по фасаду, м</th><th>Высота над землёй, м</th></tr></thead><tbody id="tStands"></tbody></table></div>
     <div class="tbl"><table><thead><tr><th>Марка опоры</th><th>Схема</th><th>Типовой проект</th><th>Опор</th><th>Допустимый момент конструкции, кН·м</th></tr></thead><tbody id="tCap"></tbody></table></div>
   </section>
@@ -83,12 +83,12 @@ small.r{display:block;color:var(--muted);font-size:12px}
   </section>
   </div>
 </main>
-<script src="pdrd-core.js?v=1.5.0"></script>
-<script src="pdrd-norms.js?v=1.5.0"></script>
-<script src="pdrd-refs-v25.js?v=1.5.0"></script>
-<script src="pdrd-refs.js?v=1.5.0"></script>
-<script src="pdrd-calc.js?v=1.5.0"></script>
-<script src="pdrd-design.js?v=1.5.0"></script>
+<script src="pdrd-core.js?v=1.6.0"></script>
+<script src="pdrd-norms.js?v=1.6.0"></script>
+<script src="pdrd-refs-v25.js?v=1.6.0"></script>
+<script src="pdrd-refs.js?v=1.6.0"></script>
+<script src="pdrd-calc.js?v=1.6.0"></script>
+<script src="pdrd-design.js?v=1.6.0"></script>
 <script>
 (function(){
   var P = PDRD, C = PDRD_CALC, $ = function(id){ return document.getElementById(id); };
@@ -176,14 +176,19 @@ small.r{display:block;color:var(--muted);font-size:12px}
     Object.keys(st).forEach(function(s){
       var o = d.stands[s] = d.stands[s] || { width_m:null, height_m:null };
       var tr = el('tr'); tr.appendChild(el('td','',s)); tr.appendChild(el('td','n', String(st[s])));
-      ['width_m','height_m'].forEach(function(k){ var td = el('td'), i = el('input'); i.inputMode = 'decimal'; i.value = o[k] === null ? '' : String(o[k]).replace('.', ','); i.onchange = function(){ o[k] = numIn(i.value); }; td.appendChild(i); tr.appendChild(td); });
+      var sg = window.PDRD_DESIGN && PDRD_DESIGN.standGeom({ stands: {} }, s);
+      ['width_m','height_m'].forEach(function(k){ var td = el('td'), i = el('input'); i.inputMode = 'decimal'; i.value = o[k] === null || o[k] === undefined ? '' : String(o[k]).replace('.', ',');
+        if (sg && sg[k]) i.placeholder = String(sg[k]).replace('.', ',') + ' (справочник)';
+        i.onchange = function(){ o[k] = numIn(i.value); }; td.appendChild(i); tr.appendChild(td); });
       ts.appendChild(tr);
     });
     var tc = $('tCap'); tc.innerHTML = '';
     Object.keys(mk).forEach(function(m){
       var o = d.poleCapacity[m] = d.poleCapacity[m] || { m_cap_knm:null };
       var tr = el('tr'); [m, mk[m].ref.sch, mk[m].ref.proj].forEach(function(x){ tr.appendChild(el('td','',x)); }); tr.appendChild(el('td','n', String(mk[m].n)));
-      var td = el('td'), i = el('input'); i.inputMode = 'decimal'; i.value = o.m_cap_knm === null ? '' : String(o.m_cap_knm).replace('.', ','); i.onchange = function(){ o.m_cap_knm = numIn(i.value); }; td.appendChild(i); tr.appendChild(td);
+      var td = el('td'), i = el('input'); i.inputMode = 'decimal'; i.value = o.m_cap_knm === null || o.m_cap_knm === undefined ? '' : String(o.m_cap_knm).replace('.', ',');
+      var cref = window.PDRD_REFS && PDRD_REFS.capacityOf(m); if (cref && cref.m_cap_knm) i.placeholder = String(cref.m_cap_knm).replace('.', ',') + ' (справочник)';
+      i.onchange = function(){ o.m_cap_knm = numIn(i.value); }; td.appendChild(i); tr.appendChild(td);
       tc.appendChild(tr);
     });
   }
@@ -333,6 +338,6 @@ small.r{display:block;color:var(--muted);font-size:12px}
   if (d.calcResult) { var m = $('runMsg'); m.appendChild(el('div','msg ok','Последний расчёт: ' + new Date(d.calcResult.at).toLocaleString('ru-RU') + '. Нажмите «Сохранить и рассчитать», чтобы обновить.')); }
 })();
 </script>
-<script src="pdrd-nav.js?v=1.5.0"></script>
+<script src="pdrd-nav.js?v=1.6.0"></script>
 </body>
 </html>

@@ -10,7 +10,54 @@ var CABLES = [{"mark": "ОРК-4", "type": "ОКСН — самонесущий 
 var WIRES = [{"mark": "АС 10/1,8", "d": 4.5, "m": 43.0, "kind": "сталеалюминиевый"}, {"mark": "АС 16/2,7", "d": 5.6, "m": 65.0, "kind": "сталеалюминиевый"}, {"mark": "АС 25/4,2", "d": 6.9, "m": 100.0, "kind": "сталеалюминиевый"}];
 var SI = [{"name": "Склерометр (Измеритель прочности бетона)", "mark": "ИПС-МГ4.01", "sn": "10819", "fgis": "С-ГА/21-07-2026/543569870", "use": "Прочность бетона на сжатие (ударный импульс)"}, {"name": "Теодолит (Измеритель угла наклона)", "mark": "РГК Т-05", "sn": "611010", "fgis": "С-ДЮП/27-08-2026/554012358", "use": "Отклонение стойки от вертикали"}, {"name": "Угломер", "mark": "RGK U-66", "sn": "", "fgis": "", "use": "Отклонение стойки от вертикали"}];
 
+/* Стойки: геометрия для ветровой нагрузки на опору.
+   Несущая способность конструкции анкерных, угловых анкерных, концевых
+   и ответвительных опор (с подкосами) — по типовому проекту, кН·м.
+   Заполняются в «Справочнике» (страница spravochnik.html) из файла филиала. */
+var STANDS = [];
+var CAPACITY = [];
+var KEY = 'pdrd_refs_v1';
+
 function norm(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
+function normKey(s) { return norm(s).toUpperCase().replace(/[\s\-]/g, '').replace(/,/g, '.'); }
+function loadCustom() {
+  try { var s = global.localStorage && global.localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+}
+function saveCustom(obj) {
+  obj.saved = new Date().toISOString();
+  if (global.PDRD && global.PDRD.safeSet) global.PDRD.safeSet(KEY, JSON.stringify(obj));
+  else global.localStorage.setItem(KEY, JSON.stringify(obj));
+  apply(obj);
+}
+function apply(obj) {
+  if (!obj) return;
+  if (obj.poles) obj.poles.forEach(function (p) { upsert(POLES, p, 'mark'); });
+  if (obj.cables) obj.cables.forEach(function (c) { upsert(CABLES, c, 'mark'); });
+  if (obj.wires) obj.wires.forEach(function (w) { upsert(WIRES, w, 'mark'); });
+  if (obj.stands) obj.stands.forEach(function (s) { upsert(STANDS, s, 'st'); });
+  if (obj.capacity) obj.capacity.forEach(function (c) { upsert(CAPACITY, c, 'mark'); });
+  mergeInto(global.PDRD_REFS_V25);
+}
+function upsert(list, item, key) {
+  var i = list.findIndex(function (x) { return normKey(x[key]) === normKey(item[key]); });
+  if (i >= 0) list[i] = Object.assign({}, list[i], item); else list.push(item);
+}
+function standOf(st) {
+  var k = normKey(st);
+  return STANDS.filter(function (s) { return normKey(s.st) === k; })[0] || null;
+}
+function capacityOf(mark) {
+  var k = normKey(mark);
+  return CAPACITY.filter(function (c) { return normKey(c.mark) === k; })[0] || null;
+}
+function wireOf(mark) {
+  var k = normKey(mark);
+  return WIRES.filter(function (w) { return normKey(w.mark) === k; })[0] || null;
+}
+function cableOf(mark) {
+  var k = normKey(mark);
+  return CABLES.filter(function (c) { return normKey(c.mark) === k; })[0] || null;
+}
 function mergeInto(R) {
   if (!R) return;
   POLES.forEach(function (p) {
@@ -28,6 +75,9 @@ function mergeInto(R) {
   R.branchAdded = { poles: POLES.length, cables: CABLES.length, wires: WIRES.length };
 }
 mergeInto(global.PDRD_REFS_V25);
+apply(loadCustom());
 
-global.PDRD_REFS = { POLES: POLES, CABLES: CABLES, WIRES: WIRES, SI: SI, mergeInto: mergeInto };
+global.PDRD_REFS = { POLES: POLES, CABLES: CABLES, WIRES: WIRES, SI: SI, STANDS: STANDS, CAPACITY: CAPACITY, KEY: KEY,
+  mergeInto: mergeInto, apply: apply, loadCustom: loadCustom, saveCustom: saveCustom,
+  standOf: standOf, capacityOf: capacityOf, wireOf: wireOf, cableOf: cableOf, normKey: normKey };
 })(typeof window !== 'undefined' ? window : globalThis);

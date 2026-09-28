@@ -3,7 +3,7 @@
   var ITEMS = [
     ['index.html', 'Выпуск'], ['proekt.html', 'Проект'], ['vhod.html', 'Исходные данные'], ['raschet.html', 'Расчёты'],
     ['resheniya.html', 'Решения'], ['skhemy.html', 'Чертежи'], ['specifikaciya.html', 'Спецификация'],
-    ['shablony.html', 'Шаблоны'], ['normy.html', 'Нормы'], ['proverka.html', 'Проверка проекта'], ['tests.html', 'Тесты']
+    ['spravochnik.html', 'Справочник'], ['shablony.html', 'Шаблоны'], ['normy.html', 'Нормы'], ['proverka.html', 'Проверка проекта'], ['tests.html', 'Тесты']
   ];
   var nav = document.getElementById('nav');
   if (!nav) return;

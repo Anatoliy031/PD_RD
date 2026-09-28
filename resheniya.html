@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Решения по опорам — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.5.0">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.6.0">
 <style>
 .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px}
 .frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
@@ -106,14 +106,14 @@ small.r{display:block;color:var(--muted);font-size:12px}
   </section>
   </div>
 </main>
-<script src="pdrd-core.js?v=1.5.0"></script>
-<script src="pdrd-norms.js?v=1.5.0"></script>
-<script src="pdrd-profiles.js?v=1.5.0"></script>
-<script src="pdrd-refs-v25.js?v=1.5.0"></script>
-<script src="pdrd-refs.js?v=1.5.0"></script>
-<script src="pdrd-calc.js?v=1.5.0"></script>
-<script src="pdrd-design.js?v=1.5.0"></script>
-<script src="pdrd-decide.js?v=1.5.0"></script>
+<script src="pdrd-core.js?v=1.6.0"></script>
+<script src="pdrd-norms.js?v=1.6.0"></script>
+<script src="pdrd-profiles.js?v=1.6.0"></script>
+<script src="pdrd-refs-v25.js?v=1.6.0"></script>
+<script src="pdrd-refs.js?v=1.6.0"></script>
+<script src="pdrd-calc.js?v=1.6.0"></script>
+<script src="pdrd-design.js?v=1.6.0"></script>
+<script src="pdrd-decide.js?v=1.6.0"></script>
 <script>
 (function(){
   var P = PDRD, X = PDRD_DECIDE, C = PDRD_CALC, $ = function(id){ return document.getElementById(id); };
@@ -265,7 +265,12 @@ small.r{display:block;color:var(--muted);font-size:12px}
       function manual(){ x.by = 'проектировщик'; tr.className = 'man'; }
       var c0 = el('td','', (p.lines||[]).map(function(l){ return l.num; }).join(' / ')); c0.appendChild(el('small','r', ((p.lines[0]||{}).lineId||'').slice(0,34) + (p.lines.length > 1 ? ' (+' + (p.lines.length-1) + ')' : ''))); tr.appendChild(c0);
       var c1 = el('td','', p.mark || '—'); c1.appendChild(el('small','r', inf.scheme + (inf.overGab ? ' · пролёт > габаритного' : ''))); tr.appendChild(c1);
-      var c2 = el('td'); if (inf.calc) c2.appendChild(el('span','st '+inf.calc.status, ST[inf.calc.status])); else c2.textContent = '—'; tr.appendChild(c2);
+      var c2 = el('td');
+      if (inf.calc){
+        c2.appendChild(el('span','st '+inf.calc.status, inf.calc.replace ? 'после замены' : ST[inf.calc.status]));
+        if (inf.calc.status !== 'ok') (inf.calc.reasons || []).slice(0, 4).forEach(function(r0){ c2.appendChild(el('small','r', r0)); });
+      } else c2.textContent = '—';
+      tr.appendChild(c2);
       var c3 = el('td'), s = el('select'); s.setAttribute('aria-label','Решение');
       s.appendChild(el('option','','—'));
       X.DECISIONS.forEach(function(o){ var op = el('option','',o.title); op.value = o.id; if (x.decision === o.id) op.selected = true; s.appendChild(op); });
@@ -310,6 +315,6 @@ small.r{display:block;color:var(--muted);font-size:12px}
   params(); sleeveUi(); lines(); sleevePanel(); refresh();
 })();
 </script>
-<script src="pdrd-nav.js?v=1.5.0"></script>
+<script src="pdrd-nav.js?v=1.6.0"></script>
 </body>
 </html>
