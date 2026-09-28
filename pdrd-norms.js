@@ -130,6 +130,8 @@ var V = [
 { id:'pue.gamma.tension1', doc:'pue7', clause:'п. 2.5.70', clauseExact:true, value:1.3, unit:'', what:'γf по нагрузке от тяжения (I группа предельных состояний)' },
 { id:'pue.temp.w0', doc:'pue7', clause:'п. 2.5.51', clauseExact:true, value:-5, unit:'°C', what:'Температура при W0 и при гололёде (при tсг выше −5 °C, высота до 1000 м)' },
 { id:'pue.montage', doc:'pue7', clause:'п. 2.5.74', clauseExact:true, value:-15, unit:'°C', what:'Проверка опор по условиям монтажа: −15 °C, ветер 50 Па на высоте 15 м, без гололёда' },
+{ id:'sp20.cx.stand', doc:'sp20', clause:'прил. В', clauseExact:false, value:0.7, unit:'', status:'требует подтверждения',
+  what:'Аэродинамический коэффициент Cx стойки опоры (принимается, если не задан в справочнике стоек; ПУЭ-7, п. 2.5.59 отсылает к СП 20.13330)' },
 { id:'pue.pulse.rc35', doc:'pue7', clause:'п. 2.5.60', clauseExact:true, value:0.8, unit:'', what:'Пульсационная составляющая ветра для одностоечных ж/б опор ВЛ до 35 кВ: QП = 0,8·QС' }
 ];
 

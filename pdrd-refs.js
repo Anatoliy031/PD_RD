@@ -14,7 +14,10 @@ var SI = [{"name": "Склерометр (Измеритель прочност�
    Несущая способность конструкции анкерных, угловых анкерных, концевых
    и ответвительных опор (с подкосами) — по типовому проекту, кН·м.
    Заполняются в «Справочнике» (страница spravochnik.html) из файла филиала. */
-var STANDS = [];
+var STANDS = [
+  /* по данным филиала (Spravochnik_PD_RD.xlsx, лист «Стойки») */
+  { st: 'СВ110-3,5', width_m: 0.185, length_m: 11, embed_m: 3.5, height_m: 7.5, source: 'справочник филиала' }
+];
 var CAPACITY = [];
 var KEY = 'pdrd_refs_v1';
 
@@ -39,6 +42,11 @@ function apply(obj) {
   mergeInto(global.PDRD_REFS_V25);
 }
 function upsert(list, item, key) {
+  /* пустые ячейки таблицы не затирают уже известные значения */
+  var clean = {};
+  Object.keys(item).forEach(function (k) { var v = item[k]; if (v !== null && v !== undefined && v !== '') clean[k] = v; });
+  item = clean;
+  if (!item[key]) return;
   var i = list.findIndex(function (x) { return normKey(x[key]) === normKey(item[key]); });
   if (i >= 0) list[i] = Object.assign({}, list[i], item); else list.push(item);
 }

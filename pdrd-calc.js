@@ -333,10 +333,16 @@ function poleMoment(pole, items, clim) {
   });
   if (pole.stand && pole.stand.width_m && pole.stand.height_m && clim) {
     var h = pole.stand.height_m, KWp = kw(h / 2, clim.terrain);
-    var Qc = KWp * clim.W0 * (pole.stand.cx || 0.7) * pole.stand.width_m * h;
+    var cxS = pole.stand.cx;
+    if (!cxS) {
+      var N0 = global.PDRD_NORMS; var cv = N0 ? N0.val('sp20.cx.stand') : { value: 0.7, ref: 'СП 20.13330.2016, прил. В' };
+      cxS = cv.value;
+      t.push('Cx стойки не задан в справочнике — принят ' + r(cxS, 2) + ' (' + cv.ref + ', требует подтверждения)');
+    }
+    var Qc = KWp * clim.W0 * cxS * pole.stand.width_m * h;
     var Q = Qc * (1 + (pole.stand.pulse === undefined ? 0.8 : pole.stand.pulse)) * 1.3;
     M += Q * h / 2;
-    t.push('Ветер на стойку: Q = Kw·W0·Cx·A·(1 + kп)·γf = ' + r(KWp, 2) + '·' + r(clim.W0, 0) + '·' + r(pole.stand.cx || 0.7, 2) + '·' + r(pole.stand.width_m * h, 2) + '·' + r(1 + (pole.stand.pulse === undefined ? 0.8 : pole.stand.pulse), 1) + '·1,3 = ' + r(Q, 0) + ' Н; плечо ' + r(h / 2, 2) + ' м → ' + r(Q * h / 2000, 3) + ' кН·м (ПУЭ-7, пп. 2.5.59, 2.5.60, 2.5.63)');
+    t.push('Ветер на стойку: Q = Kw·W0·Cx·A·(1 + kп)·γf = ' + r(KWp, 2) + '·' + r(clim.W0, 0) + '·' + r(cxS, 2) + '·' + r(pole.stand.width_m * h, 2) + '·' + r(1 + (pole.stand.pulse === undefined ? 0.8 : pole.stand.pulse), 1) + '·1,3 = ' + r(Q, 0) + ' Н; плечо ' + r(h / 2, 2) + ' м → ' + r(Q * h / 2000, 3) + ' кН·м (ПУЭ-7, пп. 2.5.59, 2.5.60, 2.5.63)');
   } else {
     blocks.push('геометрия стойки не подтверждена — ветер на стойку не учтён');
   }
