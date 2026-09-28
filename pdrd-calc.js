@@ -305,7 +305,8 @@ function freeIntervals(o) {
    items: [{ name, h, pw (Н/м, ветер на опору), n (шт.), T (Н, расчётное тяжение
            для схемы с тяжением) }] */
 function poleMoment(pole, items, clim) {
-  need(pole, ['m_adm', 'scheme'], 'опора ' + (pole.mark || ''));
+  if (!(pole.T_top_kn > 0)) need(pole, ['m_adm', 'scheme'], 'опора ' + (pole.mark || ''));
+  else need(pole, ['scheme'], 'опора ' + (pole.mark || ''));
   var t = [], M = 0, blocks = [];
   var sch = String(pole.scheme);
   var tens = /анкер|углов|концев|ответвит/.test(sch);
@@ -348,9 +349,24 @@ function poleMoment(pole, items, clim) {
   }
   var k = pole.kState === undefined ? 1 : pole.kState;
   var Madm = pole.m_adm * 1000 * k;
-  t.push('M = ' + r(M / 1000, 3) + ' кН·м; ' + (k !== 1 ? 'Mдоп·k = ' + r(pole.m_adm, 2) + '·' + r(k, 2) + ' = ' : 'Mдоп = ') + r(Madm / 1000, 3) + ' кН·м');
+  var topCheck = null;
+  if (pole.T_top_kn > 0) {
+    /* опора с подкосом (подпором): проверка по максимально допустимому горизонтальному
+       тяжению, приложенному к вершине; нагрузки приводятся к вершине по моментам */
+    var hTop = pole.h_top_m || Math.max.apply(null, items.map(function (it) { return it.h || 0; }).concat([0]));
+    if (!(hTop > 0)) blocks.push('высота вершины опоры не определена');
+    else {
+      var Feq = M / hTop, Fadm = pole.T_top_kn * 1000 * k;
+      Madm = Fadm * hTop;
+      topCheck = { F: Feq, Fadm: Fadm, h: hTop };
+      t.push('Приведённое к вершине горизонтальное усилие F = M / h = ' + r(M / 1000, 3) + ' / ' + r(hTop, 2) + ' = ' + r(Feq / 1000, 3) + ' кН; ' +
+             'допустимое тяжение на вершине' + (k !== 1 ? '·k' : '') + ' = ' + r(Fadm / 1000, 3) + ' кН' + (pole.h_top_m ? '' : ' (высота вершины принята по наивысшей точке подвеса — в запас)'));
+    }
+  } else {
+    t.push('M = ' + r(M / 1000, 3) + ' кН·м; ' + (k !== 1 ? 'Mдоп·k = ' + r(pole.m_adm, 2) + '·' + r(k, 2) + ' = ' : 'Mдоп = ') + r(Madm / 1000, 3) + ' кН·м');
+  }
   var reserve = (Madm - M) / Madm;
-  return { M: M, Madm: Madm, reserve: reserve, ok: M <= Madm && !blocks.length, exceeds: M > Madm,
+  return { M: M, Madm: Madm, reserve: reserve, top: topCheck, ok: M <= Madm && !blocks.length, exceeds: M > Madm,
            blocked: blocks, tensioned: tens, trace: t };
 }
 

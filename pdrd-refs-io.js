@@ -13,8 +13,10 @@ function kvText(v) {
 
 /* Описание блоков: признак заголовка и поля по началу названия колонки */
 var BLOCKS = [
-  { id: 'capacity', anchor: /^Марка опоры$/i, need: /Несущая способность|момент конструкции/i,
-    fields: [['mark', /^Марка опоры/i], ['m_cap_knm', /Несущая способность|момент конструкции/i], ['proj', /Типовой проект/i], ['note', /Примечание/i]] },
+  { id: 'capacity', anchor: /^Марка опоры$/i, need: /Несущая способность|момент конструкции|горизонтальное тяжение/i,
+    fields: [['mark', /^Марка опоры/i], ['m_cap_knm', /Несущая способность|момент конструкции/i],
+             ['T_top_kn', /^(?!.*подпор).*горизонтальное тяжение/i, 'num'], ['T_top_strut_kn', /подпор/i, 'num'],
+             ['proj', /Типовой проект/i], ['note', /Примечание/i]] },
   { id: 'poles', anchor: /^Марка опоры$/i, need: /Стойка/i,
     fields: [['kv', /^Класс напряжения/i, 'kv', -1], ['mark', /^Марка опоры/i], ['mat', /^Материал/i], ['type', /^Тип по назначению/i],
              ['proj', /^Типовой проект/i], ['st', /^Стойка/i], ['sch', /^Схема/i], ['m_adm', /изгибающий момент/i, 'num'],
@@ -45,7 +47,7 @@ function parse(aoa) {
         var headerText = [];
         for (var k = c0; k <= c1; k++) headerText.push(s(row[k]));
         if (!b.need.test(headerText.join(' | '))) return;
-        if (b.id === 'poles' && /Несущая способность|момент конструкции/i.test(headerText.join(' '))) return;
+        if (b.id === 'poles' && /Несущая способность|момент конструкции|горизонтальное тяжение/i.test(headerText.join(' '))) return;
         b.fields.forEach(function (f) {
           for (var k2 = c0; k2 <= c1; k2++) if (f[1].test(s(row[k2]))) { if (cols[f[0]] === undefined) cols[f[0]] = k2; }
         });
@@ -65,7 +67,7 @@ function parse(aoa) {
             item.proj_full = item.st ? item.proj + ' (' + item.st + ')' : item.proj; item.approx = 0;
             item.sch = (item.sch || '').toLowerCase();
           }
-          if (b.id === 'capacity') item.m_cap_knm = num(item.m_cap_knm);
+          if (b.id === 'capacity') { item.m_cap_knm = num(item.m_cap_knm); item.T_top_kn = num(item.T_top_kn); item.T_top_strut_kn = num(item.T_top_strut_kn); }
           out[b.id].push(item);
         }
       });
@@ -83,11 +85,15 @@ function template(R) {
     .concat((R.STANDS || []).map(function (x) { return [x.st, x.width_m, x.length_m, x.embed_m, x.height_m, x.cx, x.note]; }));
   var stSet = {}; (R.POLES || []).forEach(function (p) { if (p.st) stSet[p.st] = 1; });
   Object.keys(stSet).forEach(function (st) { if (!(R.STANDS || []).some(function (x) { return x.st === st; })) stands.push([st, '', '', '', '', '', 'заполнить по типовому проекту']); });
-  var cap = [['Марка опоры', 'Несущая способность конструкции (с подкосом), кН·м', 'Типовой проект / серия', 'Примечание']]
-    .concat((R.CAPACITY || []).map(function (x) { return [x.mark, x.m_cap_knm, x.proj, x.note]; }));
+  var cap = [['Марка опоры', 'Несущая способность конструкции (с подкосом), кН·м',
+              'Максимально допустимое горизонтальное тяжение, кН, приложенное к вершине',
+              'Максимально допустимое горизонтальное тяжение опоры с подпором, кН, приложенное к вершине',
+              'Типовой проект / серия', 'Примечание']]
+    .concat((R.CAPACITY || []).map(function (x) { return [x.mark, x.m_cap_knm, x.T_top_kn, x.T_top_strut_kn, x.proj, x.note]; }));
   (R.POLES || []).forEach(function (p) {
-    if (/анкер|концев|ответвит/.test(p.sch || '') && !(R.CAPACITY || []).some(function (x) { return x.mark === p.mark; }))
-      cap.push([p.mark, '', p.proj, 'заполнить по типовому проекту']);
+    if ((R.CAPACITY || []).some(function (x) { return x.mark === p.mark; })) return;
+    if (/анкер|концев|ответвит/.test(p.sch || '')) cap.push([p.mark, '', '', '', p.proj, 'опора с подкосом: заполнить по типовому проекту']);
+    else if (/промежуточ|углов/.test(p.sch || '') && /бетон/i.test(p.mat || '')) cap.push([p.mark, '', '', '', p.proj, 'одностоечная: для опоры с подпором (муфта)']);
   });
   var cables = [['Марка', 'Тип элемента', 'Наружный диаметр, мм', 'Погонная масса, кг/км', 'Допустимое тяжение, кН', 'Жёсткость EA, кН', 'ТКЛР, ×10⁻⁶ 1/°C', 'Область применения (кВ)', 'Примечание']]
     .concat((R.CABLES || []).map(function (x) { return [x.mark, x.type, x.d, x.m, x.t, x.EA_kn, x.alpha_e6, x.kv, x.note]; }));

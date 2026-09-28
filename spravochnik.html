@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Справочник — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.6.2">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.7.0">
 <style>
 .tbl{overflow-x:auto;margin-top:8px}
 table{border-collapse:collapse;width:100%;font-size:13.5px}
@@ -41,10 +41,10 @@ details summary{cursor:pointer;font-weight:600}
   <section class="panel" id="tables"></section>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="pdrd-core.js?v=1.6.2"></script>
-<script src="pdrd-refs-v25.js?v=1.6.2"></script>
-<script src="pdrd-refs.js?v=1.6.2"></script>
-<script src="pdrd-refs-io.js?v=1.6.2"></script>
+<script src="pdrd-core.js?v=1.7.0"></script>
+<script src="pdrd-refs-v25.js?v=1.7.0"></script>
+<script src="pdrd-refs.js?v=1.7.0"></script>
+<script src="pdrd-refs-io.js?v=1.7.0"></script>
 <script>
 (function(){
   var $ = function(id){ return document.getElementById(id); };
@@ -58,7 +58,7 @@ details summary{cursor:pointer;font-weight:600}
     var ul = el('ul','gaps');
     [['Из справочника опор (есть)', 'марка, стойка, схема, допустимый момент стойки, высота подвеса, габаритный пролёт'],
      ['Геометрия стойки', 'ширина по фасаду и высота над землёй (или длина и заглубление) — для ветровой нагрузки на опору (ПУЭ-7, пп. 2.5.59–2.5.63)'],
-     ['Несущая способность конструкции', 'для анкерных, угловых анкерных, концевых и ответвительных опор с подкосами, кН·м — по типовому проекту; момент одиночной стойки для них не применяется'],
+     ['Несущая способность опор с подкосом (подпором)', 'максимально допустимое горизонтальное тяжение, приложенное к вершине, кН (предпочтительно) или несущая способность конструкции, кН·м — по типовому проекту; для одностоечных опор с муфтой — тяжение опоры с подпором'],
      ['Провода ВЛ по классам (данные владельца)', 'марка и число проводов, высота подвеса, тяжение, наибольшая стрела; диаметр и масса подставляются из справочника по марке'],
      ['Кабель (паспорт)', 'марка — диаметр, масса и допустимое тяжение берутся из справочника; жёсткость EA и ТКЛР — из паспорта изготовителя'],
      ['Климат и проект', 'высшая, низшая и среднегодовая температуры (СП 131.13330.2020), высота подвеса кабеля']
@@ -100,8 +100,8 @@ details summary{cursor:pointer;font-weight:600}
     var st = {}; V.POLES.forEach(function(p){ if (p.st) st[p.st] = 1; });
     host.appendChild(table('Стойки', [['Стойка','st'],['Ширина по фасаду, м','width_m',1,1],['Длина, м','length_m',1],['Заглубление, м','embed_m',1],['Высота над землёй, м','height_m',1]],
       Object.keys(st).sort().map(function(s){ return Object.assign({ st: s }, R.standOf(s) || {}); })));
-    host.appendChild(table('Несущая способность анкерных опор', [['Марка опоры','mark'],['Схема','sch'],['Типовой проект','proj'],['Несущая способность, кН·м','m_cap_knm',1,1]],
-      V.POLES.filter(function(p){ return /анкер|концев|ответвит/.test(p.sch || ''); }).map(function(p){ var c = R.capacityOf(p.mark) || {}; return { mark: p.mark, sch: p.sch, proj: p.proj, m_cap_knm: c.m_cap_knm }; })));
+    host.appendChild(table('Несущая способность опор', [['Марка опоры','mark'],['Схема','sch'],['Типовой проект','proj'],['Несущая способность, кН·м','m_cap_knm',1],['Допустимое тяжение на вершине, кН','T_top_kn',1],['С подпором, кН','T_top_strut_kn',1]],
+      V.POLES.filter(function(p){ return /анкер|концев|ответвит|промежуточ|углов/.test(p.sch || ''); }).map(function(p){ var c = R.capacityOf(p.mark) || {}; return { mark: p.mark, sch: p.sch, proj: p.proj, m_cap_knm: c.m_cap_knm, T_top_kn: c.T_top_kn, T_top_strut_kn: c.T_top_strut_kn }; })));
     host.appendChild(table('Кабели ВОЛС', [['Марка','mark'],['Тип','type'],['d, мм','d',1],['Масса, кг/км','m',1],['Допустимое тяжение, кН','t',1],['EA, кН','EA_kn',1],['ТКЛР ×10⁻⁶','alpha_e6',1],['Область, кВ','kv']], V.CABLES));
     host.appendChild(table('Провода', [['Марка','mark'],['d, мм','d',1],['Масса, кг/км','m',1],['Вид','kind']], V.WIRES));
     needList();
@@ -144,6 +144,6 @@ details summary{cursor:pointer;font-weight:600}
   render();
 })();
 </script>
-<script src="pdrd-nav.js?v=1.6.2"></script>
+<script src="pdrd-nav.js?v=1.7.0"></script>
 </body>
 </html>

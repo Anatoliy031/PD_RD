@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Решения по опорам — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.6.2">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.7.0">
 <style>
 .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px}
 .frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
@@ -75,7 +75,7 @@ small.r{display:block;color:var(--muted);font-size:12px}
 
   <section class="panel">
     <h2>Муфты и запасы кабеля</h2>
-    <p class="sub">Опоры под муфты указывает проектировщик или заказчик. Введите номер опоры, выберите её в списке и нажмите «Назначить муфту». Назначенные опоры перечислены ниже; там же меняется тип муфты и длина запаса.</p>
+    <p class="sub">Опоры под муфты указывает проектировщик или заказчик. Введите номер опоры, выберите её в списке и нажмите «Назначить муфту». Назначенные опоры перечислены ниже; там же меняется тип муфты и длина запаса. На одностоечную опору с муфтой устанавливается дополнительный подпор — такие опоры отмечены в столбце «Подпор», выделяются красным на чертежах и попадают в спецификацию.</p>
     <div class="frm" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px">
       <div><label for="slNum" style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Номер опоры</label>
         <input id="slNum" placeholder="например, 12 или 1-14а" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:15px"></div>
@@ -87,7 +87,7 @@ small.r{display:block;color:var(--muted);font-size:12px}
     </div>
     <div class="btns"><button class="btn primary" id="bSl" type="button">Назначить муфту</button></div>
     <div id="slMsg"></div>
-    <div class="tbl"><table><thead><tr><th>Опора</th><th>Линия</th><th>Марка</th><th>Тип муфты</th><th>Запас, м</th><th>Усиление подкосом</th><th></th></tr></thead><tbody id="tSl"></tbody></table></div>
+    <div class="tbl"><table><thead><tr><th>Опора</th><th>Линия</th><th>Марка</th><th>Тип муфты</th><th>Запас, м</th><th>Подпор</th><th></th></tr></thead><tbody id="tSl"></tbody></table></div>
   </section>
 
   <section class="panel">
@@ -106,14 +106,14 @@ small.r{display:block;color:var(--muted);font-size:12px}
   </section>
   </div>
 </main>
-<script src="pdrd-core.js?v=1.6.2"></script>
-<script src="pdrd-norms.js?v=1.6.2"></script>
-<script src="pdrd-profiles.js?v=1.6.2"></script>
-<script src="pdrd-refs-v25.js?v=1.6.2"></script>
-<script src="pdrd-refs.js?v=1.6.2"></script>
-<script src="pdrd-calc.js?v=1.6.2"></script>
-<script src="pdrd-design.js?v=1.6.2"></script>
-<script src="pdrd-decide.js?v=1.6.2"></script>
+<script src="pdrd-core.js?v=1.7.0"></script>
+<script src="pdrd-norms.js?v=1.7.0"></script>
+<script src="pdrd-profiles.js?v=1.7.0"></script>
+<script src="pdrd-refs-v25.js?v=1.7.0"></script>
+<script src="pdrd-refs.js?v=1.7.0"></script>
+<script src="pdrd-calc.js?v=1.7.0"></script>
+<script src="pdrd-design.js?v=1.7.0"></script>
+<script src="pdrd-decide.js?v=1.7.0"></script>
 <script>
 (function(){
   var P = PDRD, X = PDRD_DECIDE, C = PDRD_CALC, $ = function(id){ return document.getElementById(id); };
@@ -212,7 +212,7 @@ small.r{display:block;color:var(--muted);font-size:12px}
       var td2 = el('td'), i2 = el('input','h'); i2.type = 'text'; i2.inputMode = 'decimal'; i2.value = x.reserve_m === null || x.reserve_m === undefined ? '' : String(x.reserve_m).replace('.', ',');
       i2.setAttribute('aria-label','Запас'); i2.onchange = function(){ x.reserve_m = numIn(i2.value); x.by = 'проектировщик'; P.replaceAll(d); d = P.load(); refresh(); };
       td2.appendChild(i2); tr.appendChild(td2);
-      tr.appendChild(el('td','', x.reinforce ? 'требуется (Е.1)' : '—'));
+      tr.appendChild(el('td', x.reinforce ? 'st exceed' : '', x.reinforce ? 'устанавливается (Е.1)' : '—'));
       var td3 = el('td'), b = el('button','btn','Убрать'); b.type = 'button';
       b.onclick = function(){ X.setSleeve(d, p.id, false); P.replaceAll(d); d = P.load(); sleeveTable(); refresh(); };
       td3.appendChild(b); tr.appendChild(td3);
@@ -223,7 +223,7 @@ small.r{display:block;color:var(--muted);font-size:12px}
     state.info = X.poleInfo(d);
     var t = X.totals(d), st = $('stats'); st.innerHTML = '';
     var mode = (d.decideParams || {}).sleeveMode === 'auto' ? 'авто' : 'вручную';
-    [[t.place,'размещать'],[t.recheck,'после поверочного расчёта'],[t.extra,'промежуточная опора (Е.1)'],[t.after,'после восстановления'],[t.bypass,'обход'],[t.sleeves,'муфт и запасов (' + mode + ')'],[t.dampers,'опор с гасителями']]
+    [[t.place,'размещать'],[t.recheck,'после поверочного расчёта'],[t.extra,'промежуточная опора (Е.1)'],[t.after,'после замены'],[t.bypass,'обход'],[t.sleeves,'муфт и запасов (' + mode + ')'],[t.reinforce,'опор с подпором'],[t.dampers,'опор с гасителями']]
       .forEach(function(x){ var c = el('div','stat'); c.appendChild(el('b','',String(x[0]||0))); c.appendChild(el('span','',x[1])); st.appendChild(c); });
     var ch = X.check(d), host = $('checks'); host.innerHTML = '';
     if (ch.length){
@@ -235,13 +235,14 @@ small.r{display:block;color:var(--muted);font-size:12px}
     table();
   }
 
-  var FL = [['all','Все'],['fork','Развилки'],['sleeve','Муфты'],['manual','Изменены вручную'],['after','После восстановления'],['nodec','Без решения']];
+  var FL = [['all','Все'],['fork','Развилки'],['sleeve','Муфты'],['strut','Подпор'],['manual','Изменены вручную'],['after','После восстановления'],['nodec','Без решения']];
   function pass(p){
     var x = p.design || {}, inf = state.info[p.id];
     if (state.find && !(p.lines || []).some(function(l){ return String(l.num).toLowerCase().indexOf(state.find.toLowerCase()) >= 0; })) return false;
     switch(state.filter){
       case 'fork': return ['extra','recheck'].indexOf(x.decision) >= 0 || inf.overGab;
       case 'sleeve': return !!x.sleeve;
+      case 'strut': return !!x.reinforce;
       case 'manual': return x.by === 'проектировщик';
       case 'after': return x.decision === 'after';
       case 'nodec': return !x.decision;
@@ -284,6 +285,7 @@ small.r{display:block;color:var(--muted);font-size:12px}
       ns.onchange = function(){ x.node = ns.value; manual(); }; c5.appendChild(ns); tr.appendChild(c5);
       var c6 = el('td'), sc = el('input'); sc.type = 'checkbox'; sc.checked = !!x.sleeve; sc.setAttribute('aria-label','Муфта');
       sc.onchange = function(){ X.setSleeve(d, p.id, sc.checked); manual(); table(); sleeveTable(); }; c6.appendChild(sc);
+      if (x.reinforce) c6.appendChild(el('small','r','+ подпор (Е.1)'));
       if (x.sleeve){
         var ts = el('select'); ts.setAttribute('aria-label','Тип муфты');
         ['прямая','разветвительная','дроп-муфта','оптический распределительный шкаф'].forEach(function(o){ var op = el('option','',o); op.value = o; if ((x.sleeveType||'прямая') === o) op.selected = true; ts.appendChild(op); });
@@ -315,6 +317,6 @@ small.r{display:block;color:var(--muted);font-size:12px}
   params(); sleeveUi(); lines(); sleevePanel(); refresh();
 })();
 </script>
-<script src="pdrd-nav.js?v=1.6.2"></script>
+<script src="pdrd-nav.js?v=1.7.0"></script>
 </body>
 </html>

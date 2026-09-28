@@ -211,9 +211,14 @@ function poleNums(p) { return (p.lines || []).map(function (l) { return l.num; }
 /* Условное обозначение опоры: промежуточная — стойка; анкерная, угловая
    анкерная и ответвительная — стойка с двумя подкосами; концевая — с одним
    подкосом со стороны, противоположной тяжению. Подкосы всегда идут вниз. */
-function poleSymbol(sh, x, yTop, yBase, scheme, layer) {
+function poleSymbol(sh, x, yTop, yBase, scheme, layer, strut) {
   layer = layer || 'ВЛ_ОПОРЫ';
   var hgt = yBase - yTop, s = String(scheme || '');
+  if (strut) {
+    /* дополнительный подпор к одностоечной опоре — выделяется красным */
+    sh.line(x, yTop + hgt * 0.3, x + hgt * 0.42, yBase, 'МУФТЫ', 0.7);
+    sh.line(x + hgt * 0.42 - 1.2, yBase, x + hgt * 0.42 + 1.2, yBase, 'МУФТЫ', 0.7);
+  }
   sh.line(x, yTop, x, yBase, layer, 0.6);
   var d = hgt * 0.42, top = yTop + hgt * 0.28;
   if (/концев/.test(s)) sh.line(x, top, x - d, yBase, layer, 0.5);
@@ -326,7 +331,7 @@ function planSheets(d) {
       var on = onRoute(g.a) && onRoute(g.b) && (d.lines.filter(function (l) { return l.id === g.line; })[0] || {}).cable !== false;
       sh.line(cl[0][0], cl[0][1], cl[1][0], cl[1][1], on ? 'ВОЛС' : 'ВЛ_ПРОВОДА', on ? 0.8 : 0.3);
     });
-    var labels = items.length <= 90;
+    var labels = items.length <= 90, planStrut = false;
     /* соседние опоры — чтобы подписи ставить в стороне от линии трассы */
     var nb = {};
     segs.forEach(function (g) {
@@ -340,6 +345,7 @@ function planSheets(d) {
       if (x.sleeve) sh.poly([[q[0], q[1] - 2.2], [q[0] - 1.9, q[1] + 1.1], [q[0] + 1.9, q[1] + 1.1]], true, 'МУФТЫ', 0.4);
       else if (['after', 'bypass', 'exclude'].indexOf(x.decision) >= 0) sh.circle(q[0], q[1], 1.4, 'МУФТЫ', false);
       else sh.circle(q[0], q[1], labels ? 0.9 : 0.5, 'ВЛ_ОПОРЫ', true);
+      if (x.reinforce) { sh.circle(q[0], q[1], 3.0, 'МУФТЫ', false); sh.circle(q[0], q[1], 3.3, 'МУФТЫ', false); planStrut = true; }
       if (!labels) return;
       var dx = 0, dy = 0;
       (nb[p.id] || []).forEach(function (o) { var r = P(o), l = Math.hypot(r[0] - q[0], r[1] - q[1]) || 1; dx += (r[0] - q[0]) / l; dy += (r[1] - q[1]) / l; });
@@ -356,6 +362,7 @@ function planSheets(d) {
       ly = Math.min(Math.max(ly, Z.y0 + FS.small), Z.y1 - 0.5);
       sh.text(lx, ly, s2, FS.small, { a: 'middle', l: 'ТЕКСТ', max: 24 });
     });
+    if (planStrut) sh.note('Красным двойным кольцом выделены опоры, к которым устанавливается дополнительный подпор.');
     northArrow(sh, Z.x1 - 12, Z.y0 + 5, rot);
     scaleBar(sh, Z.x1 - 62, Z.y1 - 3, sc);
     sh.meta.scale = sc;
@@ -624,14 +631,16 @@ function routeSheets(d) {
   if (!rows.length) return [];
   for (var s = 0; s < rows.length; s += rowsPerSheet) {
     var sh = new Sheet({ kind: 'route', title: 'Схема размещения ОК на опорах ВЛ, лист ' + (Math.floor(s / rowsPerSheet) + 1) });
+    var anyStrut = false;
     rows.slice(s, s + rowsPerSheet).forEach(function (row, j) {
       var y = j * 62, x0 = 0, step = 26;
       sh.text(x0, y, clip(row.line.name, 200, FS.text) + (row.part > 1 ? ' (продолжение)' : '') + ', ' + fm(row.line.kv, 1) + ' кВ', FS.text, { b: true });
       var base = y + 26;
       row.items.forEach(function (it, k) {
         var x = x0 + k * step, des = it.p.design || {};
-        poleSymbol(sh, x, y + 8, base, schemeOf(it.p));
-        sh.text(x, base + 5, it.r.num, FS.text, { a: 'middle', max: step - 1 });
+        poleSymbol(sh, x, y + 8, base, schemeOf(it.p), des.reinforce ? 'МУФТЫ' : 'ВЛ_ОПОРЫ', !!des.reinforce);
+        if (des.reinforce) anyStrut = true;
+        sh.text(x, base + 5, it.r.num, FS.text, { a: 'middle', max: step - 1, l: des.reinforce ? 'МУФТЫ' : 'ТЕКСТ' });
         sh.text(x, base + 9.5, it.r.mark || '—', FS.small, { a: 'middle', max: step - 1 });
         var code = { place: des.node || '', recheck: (des.node || '') + '*', extra: 'Е1', after: 'В', bypass: '—', exclude: '×' }[des.decision] || '?';
         sh.text(x, base + 14, code, FS.text, { a: 'middle', l: des.decision === 'place' ? 'ТЕКСТ' : 'МУФТЫ' });
@@ -646,7 +655,8 @@ function routeSheets(d) {
     });
     sh.note('Под опорой указаны: номер опоры, марка опоры, узел крепления кабеля и высота подвеса кабеля, м. Над линией — длина пролёта, м.');
     sh.note('Узлы крепления: П — поддерживающий; ПУ — поддерживающий угловой; А1 — анкерный односторонний; А2 — анкерный двусторонний; АО — анкерный с ответвлением; С — узел спуска (муфта, запас).');
-    sh.note('Решения: * — размещение после поверочного расчёта по типовому проекту; Е1 — установка дополнительной опоры (мероприятие Е.1); В — размещение после восстановления опоры владельцем; ▲ — муфта и запас кабеля.');
+    sh.note('Решения: * — размещение после поверочного расчёта по типовому проекту; Е1 — установка дополнительной опоры (мероприятие Е.1); В — размещение после замены опоры владельцем; ▲ — муфта и запас кабеля.');
+    if (anyStrut) sh.note('Красным выделены одностоечные опоры с муфтой, к которым устанавливается дополнительный подпор (мероприятие Е.1, позиция спецификации «Подпор»).');
     fitSheet(sh);
     out.push(sh);
   }
@@ -715,6 +725,12 @@ function layoutSheets(d) {
       sh.text(x, base + 12, m, FS.head, { a: 'middle', b: true });
       sh.text(x, base + 18, clip((ref ? ref.type : '') + ', опор: ' + ps.length, 90, FS.small), FS.small, { a: 'middle' });
       sh.text(x, base + 23, 'высота ОК: ' + fm(hs[0], 2) + '…' + fm(hs[hs.length - 1], 2) + ' м', FS.small, { a: 'middle' });
+      var nStrut = ps.filter(function (q) { return q.design.reinforce; }).length;
+      if (nStrut) {
+        sh.line(x + 1.8, base - standH * sc * 0.62, x + standH * sc * 0.4, base, 'МУФТЫ', 0.7);
+        sh.text(x + standH * sc * 0.4, base + 4, 'подпор', FS.small, { a: 'middle', l: 'МУФТЫ' });
+        sh.text(x, base + 28, 'с подпором: ' + nStrut + ' оп. (' + ps.filter(function (q) { return q.design.reinforce; }).map(poleNums).slice(0, 6).join(', ') + ')', FS.small, { a: 'middle', l: 'МУФТЫ', max: 90 });
+      }
     });
     sh.note('Расстояния от кабеля до проводов — ТТ № 282р, п. 3.2.2 и ПУЭ-7, пп. 2.4.89, 2.5.197; до элементов опоры — не менее ' + fm(N.val('tt.dist.element').value, 2) + ' м (ТТ № 282р, п. 3.2.3).');
     sh.note('Показана медианная высота подвеса кабеля для марки опоры; высота по каждой опоре приведена в ведомости опор. Анкерные, концевые, угловые и ответвительные опоры показаны с подкосами по типовому проекту.');

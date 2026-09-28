@@ -661,14 +661,40 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     eq(PDRD_AUDIT.run(d0).some(function(x){ return x.lv === 'stop' && /тип и марка/.test(x.text); }), true, 'выпуск заблокирован');
     return 'каталог проверяется';
   });
-  t('Одностоечная опора с муфтой усиливается подкосом', function(){
+  t('Опора с подкосом: проверка по допустимому горизонтальному тяжению на вершине, кН', function(){
+    var m = CL.poleMoment({ scheme:'анкерная', m_adm:20, T_top_kn:9, h_top_m:7.5, windSpan:40, stand:{ width_m:0.2, height_m:7.5, cx:0.7 } },
+      [{ name:'ОК', h:6, pw:0, T:1000 }], { W0:650, terrain:'A' });
+    near(m.top.F, m.M / 7.5, 1e-9, 'приведение к вершине'); near(m.top.Fadm, 9000, 1e-9, 'допустимое');
+    near(m.Madm, 9000 * 7.5, 1e-9, 'эквивалентный момент');
+    eq(m.trace.some(function(x){ return /приложенн|вершин/.test(x); }), true, 'след расчёта');
+    var d0 = window.PDRD_DEMO.build(); d0.poleCapacity = { 'КА8-1': { T_top_kn: 9 } };
+    var r0 = PDRD_DESIGN.run(d0).poles.filter(function(x){ return x.mark === 'КА8-1'; })[0];
+    eq(typeof r0.Ftop === 'number' && r0.FtopAdm === 9000, true, 'используется в расчёте проекта взамен кН·м');
+    return 'F = ' + (r0.Ftop / 1000).toFixed(2) + ' кН из 9';
+  });
+  t('Подпор: опора выделена красным на схеме размещения и на плане', function(){
+    PDRD_SVG.reset(demo);
+    var sh = PDRD_SVG.sheets(demo);
+    var route = sh.filter(function(s){ return s.meta.kind === 'route'; })[0];
+    eq(route.notes.some(function(n){ return /подпор/.test(n); }), true, 'примечание на схеме');
+    eq(route.p.some(function(e){ return e.t === 'line' && e.l === 'МУФТЫ' && Math.abs(e.x2 - e.x1) > 1 && e.y2 > e.y1 + 1; }), true, 'красный подпор (наклонный, вниз)');
+    var plan = sh.filter(function(s){ return s.meta.kind === 'plan'; })[0];
+    eq(plan.p.filter(function(e){ return e.t === 'circle' && e.l === 'МУФТЫ' && e.r >= 3; }).length >= 2, true, 'кольцо на плане');
+    return 'выделено';
+  });
+  t('Справочник: колонки тяжения на вершине и с подпором', function(){
+    var r = window.PDRD_REFS_IO.parse([['Марка опоры', 'Несущая способность конструкции (с подкосом), кН·м', 'Максимально допустимое горизонтальное тяжение, кН, приложенное к вершине', 'Максимально допустимое горизонтальное тяжение опоры с подпором, кН, приложенное к вершине'], ['А8-1', 20, 9.5, ''], ['П8-1', '', '', 6]]);
+    eq(r.capacity[0].T_top_kn, 9.5, 'тяжение на вершине'); eq(r.capacity[1].T_top_strut_kn, 6, 'с подпором');
+    return 'разобрано';
+  });
+  t('Одностоечная опора с муфтой: дополнительный подпор в решениях, спецификации, ВОР и Е.1', function(){
     var t2 = PDRD_DECIDE.totals(demo);
     eq(t2.reinforce > 0, true, 'усиление предусмотрено');
     var sp = PDRD_SPEC.build(demo);
     eq(sp.items.some(function(x){ return x.key === 'strut' && x.qty === t2.reinforce; }), true, 'подкос в спецификации');
-    eq(PDRD_SPEC.bor(demo, sp).some(function(x){ return /подкос/i.test(x.name); }), true, 'работа в ВОР');
+    eq(PDRD_SPEC.bor(demo, sp).some(function(x){ return /подпор/i.test(x.name); }), true, 'работа в ВОР');
     var dd = PDRD_DOCX.dataFromProject(demo, PDRD_DOCX.TEMPLATES[0]);
-    eq(dd.tables['Е1'].rows.some(function(x){ return /подкос/i.test(x[1]); }), true, 'мероприятие Е.1');
+    eq(dd.tables['Е1'].rows.some(function(x){ return /подпор/i.test(x[1]); }), true, 'мероприятие Е.1');
     return t2.reinforce + ' опор';
   });
   t('Ведомость пролётов заполняется', function(){

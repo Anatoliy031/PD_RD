@@ -288,18 +288,28 @@ function run(d) {
     }
     try {
       var struts = /анкер|концев|ответвит/.test(ref.sch);
-      var capProj = num(((d.poleCapacity || {})[p.mark] || {}).m_cap_knm);
-      var capRef = RF && RF.capacityOf(p.mark) ? num(RF.capacityOf(p.mark).m_cap_knm) : null;
+      var pc = (d.poleCapacity || {})[p.mark] || {}, rc = (RF && RF.capacityOf(p.mark)) || {};
+      var reinf = !!(p.design && p.design.reinforce);
+      /* допустимое горизонтальное тяжение на вершине, кН: для опор с подкосом, а для
+         одностоечной опоры с подпором — значение «с подпором» */
+      var Ttop = reinf ? (num(pc.T_top_strut_kn) !== null ? num(pc.T_top_strut_kn) : num(rc.T_top_strut_kn))
+                       : (num(pc.T_top_kn) !== null ? num(pc.T_top_kn) : num(rc.T_top_kn));
+      if (reinf && Ttop === null) row.warns.push('одностоечная опора с муфтой: предусмотрен подпор; допустимое тяжение опоры с подпором не задано («Справочник» → «Несущая способность») — проверка по стойке без подпора');
+      if (reinf && Ttop !== null) row.warns.push('проверка опоры с подпором: допустимое горизонтальное тяжение на вершине ' + Ttop + ' кН');
+      var capProj = num(pc.m_cap_knm);
+      var capRef = num(rc.m_cap_knm);
       var cap = struts ? (capProj !== null ? capProj : capRef) : ref.m_adm;
-      if (struts && cap !== null && ref.m_adm && Math.abs(cap - ref.m_adm) < 1e-6)
+      if (struts && Ttop !== null) cap = cap === null ? ref.m_adm : cap;
+      if (struts && Ttop === null && cap !== null && ref.m_adm && Math.abs(cap - ref.m_adm) < 1e-6)
         row.warns.push('несущая способность конструкции принята равной допустимому моменту одной стойки (' + ref.m_adm + ' кН·м) — оценка в запас; подкос в ней не учтён, при превышении — поверочный расчёт по типовому проекту ' + ref.proj);
-      if (struts && cap === null) {
-        blocked.push('опора с подкосом/оттяжкой: допустимый момент конструкции в направлении тяжения не задан (типовой проект ' + ref.proj + ')');
-        addMiss('Несущая способность конструкции анкерных, угловых анкерных, концевых и ответвительных опор, кН·м — «Справочник» → «Несущая способность» или «Расчёты»', p.mark);
+      if (struts && cap === null && Ttop === null) {
+        blocked.push('опора с подкосом: не задано допустимое горизонтальное тяжение на вершине (кН) или несущая способность конструкции (кН·м) — типовой проект ' + ref.proj);
+        addMiss('Допустимое горизонтальное тяжение на вершине, кН (или несущая способность конструкции, кН·м) для анкерных, угловых анкерных, концевых и ответвительных опор — «Справочник» → «Несущая способность» или «Расчёты»', p.mark);
       }
       var pm = calc.poleMoment({ mark: p.mark, scheme: ref.sch, m_adm: cap === null ? ref.m_adm : cap, kState: k, angle: angle, windSpan: 1,
-                                 stand: stand }, items, { W0: inp.W0, terrain: inp.terrain });
-      if (struts && cap === null) pm.exceeds = false;
+                                 stand: stand, T_top_kn: Ttop, h_top_m: stand ? stand.height_m : null }, items, { W0: inp.W0, terrain: inp.terrain });
+      if (struts && cap === null && Ttop === null) pm.exceeds = false;
+      if (pm.top) { row.Ftop = pm.top.F; row.FtopAdm = pm.top.Fadm; }
       row.M = pm.M; row.Madm = pm.Madm; row.reserve = pm.reserve; row.trace = pm.trace;
       blocked = blocked.concat(pm.blocked);
       if (pm.exceeds) { row.status = 'exceed'; row.reasons.push('момент ' + calc.fmt(pm.M / 1000, 2) + ' кН·м > допустимого ' + calc.fmt(pm.Madm / 1000, 2) + ' кН·м'); }
@@ -322,7 +332,7 @@ function run(d) {
 function store(d, res) {
   res = res || run(d);
   d.calcResult = { at: res.at, app: global.PDRD ? global.PDRD.VERSION : '', summary: res.summary,
-    poles: res.poles.map(function (x) { return { id: x.id, status: x.status, reasons: x.reasons, warns: x.warns, M: x.M, Madm: x.Madm, replace: !!x.replace, scheme: x.scheme }; }),
+    poles: res.poles.map(function (x) { return { id: x.id, status: x.status, reasons: x.reasons, warns: x.warns, M: x.M, Madm: x.Madm, Ftop: x.Ftop, FtopAdm: x.FtopAdm, replace: !!x.replace, scheme: x.scheme }; }),
     sections: res.sections.map(function (s) { return { id: s.id, line: s.line, kv: s.kv, status: s.status, Lr: s.Lr, length: s.length, H0: s.solution ? s.solution.H0 : null, fVert: s.fVert, reasons: s.reasons }; }),
     spans: res.spans.map(function (s) { return { section: s.section, line: s.line, from: s.from, to: s.to, L: s.L, status: s.status, clearance: s.clearance, wireDist: s.wireDist, fmax: s.fmax, reasons: s.reasons }; }),
     missing: res.missing };

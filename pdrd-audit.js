@@ -96,7 +96,7 @@ function run(d, opt) {
     if (sp.lengths.short_m) add('Спецификация', 'stop', 'Протяжённость трассы по расчёту (' + (sp.lengths.route_m / 1000).toFixed(3).replace('.', ',') + ' км) меньше заявленной в исходных данных на ' + Math.round(sp.lengths.short_m) + ' м — проверьте пролёты, решения по опорам и перечень линий');
     if (!d.cable.cert) add('Спецификация', 'stop', 'Нет реквизитов документа соответствия на кабель', 'ТТ № 282р, п. 3.3; приказ Мининформсвязи № 47');
     if (sp.needType) add('Спецификация', 'stop', 'Не указаны тип и марка для ' + sp.needType + ' позиций спецификации (страница «Спецификация»)', 'ГОСТ 21.110-2013');
-    if (sp.reinforced) add('Спецификация', 'warn', 'Усиление подкосом предусмотрено на ' + sp.reinforced + ' одностоечных опорах с муфтой — согласовать с владельцем инфраструктуры (мероприятие Е.1)');
+    if (sp.reinforced) add('Спецификация', 'warn', 'Дополнительный подпор предусмотрен на ' + sp.reinforced + ' одностоечных опорах с муфтой — согласовать с владельцем инфраструктуры (мероприятие Е.1)');
     if (!sp.lengths.params.sagFactorSet) add('Спецификация', 'warn', 'Коэффициент на провис и отходы принят по умолчанию (' + String(sp.lengths.params.sagFactor).replace('.', ',') + ') — подтвердить');
     var t = sp.totals, nodesAll = Object.keys(t.nodes).reduce(function (a, k) { return a + t.nodes[k]; }, 0);
     var tags = (sp.items.filter(function (x) { return x.key === 'tag'; })[0] || {}).qty || 0;
