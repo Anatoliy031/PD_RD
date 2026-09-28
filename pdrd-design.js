@@ -119,8 +119,8 @@ function sections(d) {
    длина стойки и заглубление → высота над землёй) */
 function standGeom(d, st) {
   var own = (d.stands || {})[st];
-  if (own && num(own.width_m) && num(own.height_m)) return own;
   var RF = global.PDRD_REFS, s = RF ? RF.standOf(st) : null;
+  if (own && num(own.width_m) && num(own.height_m)) return Object.assign({ cx: s && num(s.cx) ? num(s.cx) : undefined }, own);
   if (!s) return null;
   var w = num(s.width_m), hAbove = num(s.height_m);
   if (hAbove === null && num(s.length_m) !== null && num(s.embed_m) !== null) hAbove = num(s.length_m) - num(s.embed_m);
@@ -291,6 +291,8 @@ function run(d) {
       var capProj = num(((d.poleCapacity || {})[p.mark] || {}).m_cap_knm);
       var capRef = RF && RF.capacityOf(p.mark) ? num(RF.capacityOf(p.mark).m_cap_knm) : null;
       var cap = struts ? (capProj !== null ? capProj : capRef) : ref.m_adm;
+      if (struts && cap !== null && ref.m_adm && Math.abs(cap - ref.m_adm) < 1e-6)
+        row.warns.push('несущая способность конструкции принята равной допустимому моменту одной стойки (' + ref.m_adm + ' кН·м) — оценка в запас; подкос в ней не учтён, при превышении — поверочный расчёт по типовому проекту ' + ref.proj);
       if (struts && cap === null) {
         blocked.push('опора с подкосом/оттяжкой: допустимый момент конструкции в направлении тяжения не задан (типовой проект ' + ref.proj + ')');
         addMiss('Несущая способность конструкции анкерных, угловых анкерных, концевых и ответвительных опор, кН·м — «Справочник» → «Несущая способность» или «Расчёты»', p.mark);
