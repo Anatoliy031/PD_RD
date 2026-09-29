@@ -312,8 +312,19 @@ function poleMoment(pole, items, clim) {
   var tens = /анкер|углов|концев|ответвит/.test(sch);
   var share = 0, shareTxt = '';
   if (/концев|ответвит/.test(sch)) { share = 1; shareTxt = 'одностороннее тяжение (' + sch + ')'; }
-  else if (/углов/.test(sch)) {
-    if (!(pole.angle > 0)) blocks.push('угол поворота линии не задан');
+  else if (/углов/.test(sch) && /анкер/.test(sch)) {
+    /* угловая анкерная: наибольшее из равнодействующей 2·sin(α/2) и одностороннего
+       тяжения монтажного режима (ПУЭ-7, п. 2.5.74) */
+    if (pole.angle > 0) {
+      var s2 = 2 * Math.sin(pole.angle * Math.PI / 360);
+      share = Math.max(1, s2);
+      shareTxt = s2 > 1 ? '2·sin(α/2) = 2·sin(' + r(pole.angle, 1) + '°/2) = ' + r(s2, 3) : 'одностороннее тяжение монтажного режима (2·sin(α/2) = ' + r(s2, 3) + ' меньше 1; ПУЭ-7, п. 2.5.74)';
+    } else {
+      share = 1; shareTxt = 'угол не задан — одностороннее тяжение монтажного режима (ПУЭ-7, п. 2.5.74); при угле более 60° нужен ввод угла';
+      t.push('Внимание: угол поворота не задан; при угле более 60° равнодействующая больше одностороннего тяжения — задайте угол в «Решениях»');
+    }
+  } else if (/углов/.test(sch)) {
+    if (!(pole.angle > 0)) blocks.push('угол поворота линии не задан — задайте угол в «Решениях» (столбец «Угол, °»)');
     else { share = 2 * Math.sin(pole.angle * Math.PI / 360); shareTxt = '2·sin(α/2) = 2·sin(' + r(pole.angle, 1) + '°/2) = ' + r(share, 3); }
   } else if (/анкер/.test(sch)) { share = 1; shareTxt = 'одностороннее тяжение в монтажном режиме (ПУЭ-7, п. 2.5.74)'; }
   items.forEach(function (it) {
@@ -324,7 +335,7 @@ function poleMoment(pole, items, clim) {
     M += mw;
     t.push(it.name + ': ветер ' + r(it.pw, 3) + ' Н/м × ' + r(span, 1) + ' м × ' + n + ' = ' + r(Fw, 1) + ' Н; плечо ' + r(it.h, 2) + ' м → ' + r(mw / 1000, 3) + ' кН·м');
     if (tens) {
-      if (it.T === null || it.T === undefined) blocks.push(it.name + ': тяжение не задано');
+      if (it.T === null || it.T === undefined) blocks.push(it.name + ': тяжение не задано — ' + (/ОК/.test(it.name) ? 'нужен паспорт кабеля (EA, ТКЛР, МДРН) на странице «Расчёты»' : 'задайте тяжение проводов на странице «Расчёты»'));
       else if (share) {
         var mt = it.T * share * n * it.h;
         M += mt;

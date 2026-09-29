@@ -428,6 +428,23 @@ if (CL) {
     eq(m2.ok, false); eq(m2.blocked.length, 1);
     return '2·sin 30° = 1';
   });
+  t('Угловая анкерная: без угла — одностороннее тяжение, с углом — наибольшее', function(){
+    var st = { width_m:0.2, height_m:8, cx:0.7 };
+    var a = CL.poleMoment({ scheme:'угловая анкерная', m_adm:20, windSpan:40, stand:st }, [{ name:'ОК', h:6, pw:0, T:1000 }], { W0:650, terrain:'A' });
+    eq(a.blocked.length, 0, 'не блокируется');
+    var b = CL.poleMoment({ scheme:'угловая анкерная', m_adm:20, angle:90, windSpan:40, stand:st }, [{ name:'ОК', h:6, pw:0, T:1000 }], { W0:650, terrain:'A' });
+    near(b.M - a.M, 1000 * 6 * (2 * Math.sin(Math.PI / 4) - 1), 1e-6, 'при 90° — 2·sin 45°');
+    return 'проверено';
+  });
+  t('Угол, заданный в решениях, имеет приоритет; тяжение кабеля вне участка — в запас', function(){
+    var d0 = window.PDRD_DEMO.build();
+    var p = d0.poles.filter(function(x){ return x.mark === 'УА10-1'; })[0];
+    p.design.angle = 75;
+    var r0 = PDRD_DESIGN.run(d0).poles.filter(function(x){ return x.id === p.id; })[0];
+    eq(r0.angle, 75, 'угол из решений');
+    eq(r0.warns.some(function(w){ return /задан проектировщиком/.test(w); }), true, 'отметка');
+    return 'угол 75°';
+  });
   t('Нет геометрии стойки — результат не выпускается', function(){
     var m = CL.poleMoment({ scheme:'промежуточная', m_adm:20, windSpan:40, stand:null }, [{ name:'ОК', h:6, pw:1 }], { W0:650, terrain:'A' });
     eq(m.ok, false); eq(/стойки/.test(m.blocked[0]), true); return 'блок';

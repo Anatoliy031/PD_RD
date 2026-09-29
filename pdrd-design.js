@@ -266,7 +266,13 @@ function run(d) {
       /* проектируемый кабель */
       var adj = secBySpan[rec.line_id + '|' + rec.num] || [];
       var Hs = adj.map(function (x) { return x.Hsup; }).filter(function (x) { return x; });
-      var srow = { Hsup: Hs.length === adj.length && Hs.length ? Math.max.apply(null, Hs) : null };
+      var srow = { Hsup: Hs.length ? Math.max.apply(null, Hs) : null };
+      if (srow.Hsup === null && inp.cab.T_max) {
+        /* опора вне рассчитанных анкерных участков (конец данных, ссылка на другую линию):
+           тяжение кабеля принимается равным максимально допустимому — в запас */
+        srow.Hsup = inp.cab.T_max;
+        row.warns.push('тяжение кабеля на опоре принято равным максимально допустимому (' + calc.fmt(inp.cab.T_max / 1000, 2) + ' кН) — опора вне рассчитанного анкерного участка, оценка в запас');
+      }
       try {
         var lc = calc.loads({ d_mm: inp.cab.d_mm, mass_kg_km: inp.cab.mass_kg_km },
           { W0: inp.W0, bE: inp.bE, terrain: inp.terrain, kv: rec.kv, iceRegion: inp.iceRegion, h: inp.cableH || 0, L: ws || 50, purpose: 'support1', oksn: true, multi: recs.length > 1 });
@@ -276,14 +282,16 @@ function run(d) {
       /* ранее размещённые ОК — нужны характеристики */
       if (rec.existing) { blocked.push('ранее размещённые ОК «' + rec.existing + '» — характеристики не заданы'); addMiss('Характеристики ранее размещённых ОК', rec.num); }
     });
-    var angle = num(recs.map(function (x) { return x.angle; }).filter(function (x) { return x !== null && x !== undefined; })[0]);
+    var angle = num((p.design || {}).angle);
+    if (angle !== null) row.warns.push('угол поворота ' + calc.fmt(angle, 1) + '° задан проектировщиком');
+    if (angle === null) angle = num(recs.map(function (x) { return x.angle; }).filter(function (x) { return x !== null && x !== undefined; })[0]);
     var angleSuspect = false;
     if (angle === null) {
       var ang = recs.map(function (x) { return deflection(d, x); }).filter(function (x) { return x !== null; });
       if (ang.length) {
         angle = Math.max.apply(null, ang);
         row.warns.push('угол поворота ' + calc.fmt(angle, 1) + '° определён по координатам опор');
-        if (angle > 90) { row.reasons.push('угол поворота по координатам ' + calc.fmt(angle, 0) + '° — проверить ссылки «пред./след.» и трассу'); angleSuspect = true; }
+        if (angle > 90) { row.reasons.push('угол поворота по координатам ' + calc.fmt(angle, 0) + '° — проверить ссылки «пред./след.» или задать угол в «Решениях»'); angleSuspect = true; }
       }
     }
     try {
@@ -310,6 +318,7 @@ function run(d) {
                                  stand: stand, T_top_kn: Ttop, h_top_m: stand ? stand.height_m : null }, items, { W0: inp.W0, terrain: inp.terrain });
       if (struts && cap === null && Ttop === null) pm.exceeds = false;
       if (pm.top) { row.Ftop = pm.top.F; row.FtopAdm = pm.top.Fadm; }
+      row.angle = angle;
       row.M = pm.M; row.Madm = pm.Madm; row.reserve = pm.reserve; row.trace = pm.trace;
       blocked = blocked.concat(pm.blocked);
       if (pm.exceeds) { row.status = 'exceed'; row.reasons.push('момент ' + calc.fmt(pm.M / 1000, 2) + ' кН·м > допустимого ' + calc.fmt(pm.Madm / 1000, 2) + ' кН·м'); }
@@ -332,7 +341,7 @@ function run(d) {
 function store(d, res) {
   res = res || run(d);
   d.calcResult = { at: res.at, app: global.PDRD ? global.PDRD.VERSION : '', summary: res.summary,
-    poles: res.poles.map(function (x) { return { id: x.id, status: x.status, reasons: x.reasons, warns: x.warns, M: x.M, Madm: x.Madm, Ftop: x.Ftop, FtopAdm: x.FtopAdm, replace: !!x.replace, scheme: x.scheme }; }),
+    poles: res.poles.map(function (x) { return { id: x.id, status: x.status, reasons: x.reasons, warns: x.warns, M: x.M, Madm: x.Madm, Ftop: x.Ftop, FtopAdm: x.FtopAdm, replace: !!x.replace, scheme: x.scheme, angle: x.angle }; }),
     sections: res.sections.map(function (s) { return { id: s.id, line: s.line, kv: s.kv, status: s.status, Lr: s.Lr, length: s.length, H0: s.solution ? s.solution.H0 : null, fVert: s.fVert, reasons: s.reasons }; }),
     spans: res.spans.map(function (s) { return { section: s.section, line: s.line, from: s.from, to: s.to, L: s.L, status: s.status, clearance: s.clearance, wireDist: s.wireDist, fmax: s.fmax, reasons: s.reasons }; }),
     missing: res.missing };
