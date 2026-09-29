@@ -634,6 +634,20 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     eq(r.capacity.length, 1, 'несущая способность'); eq(r.capacity[0].m_cap_knm, 55, 'значение');
     return 'опоры, кабели, стойки, несущая способность';
   });
+  t('Проверка справочника: заполнение одним числом и нереальная жёсткость кабеля', function(){
+    var IO = window.PDRD_REFS_IO;
+    var poles = []; for (var i = 0; i < 20; i++) poles.push({ mark: 'Т' + i, st: 'С' + (i % 5), mat: i < 3 ? 'Деревянная' : 'Железобетонная', m_adm: 85 });
+    var cap = []; for (var j = 0; j < 20; j++) cap.push({ mark: 'Т' + j, T_top_kn: 10 });
+    var cables = []; for (var k = 1; k <= 6; k++) cables.push({ mark: 'К' + k, t: k, EA_kn: 15 * k });
+    var r = IO.check({ poles: poles, capacity: cap, cables: cables, stands: [{ st: 'СК32.2-1', length_m: 11, embed_m: 2.5, height_m: 8.5 }] }, {});
+    function has(re){ return r.some(function(x){ return re.test(x.text); }); }
+    eq(has(/одним значением/), true, 'протяжка'); eq(has(/деревянных/), true, 'деревянные = ж/б');
+    eq(has(/удлинение/), true, 'удлинение'); eq(has(/по формуле/), true, 'формула');
+    eq(has(/не соответствует обозначению/), true, 'длина стойки');
+    var ok = IO.check({ cables: [{ mark: 'А', t: 2.7, EA_kn: 600 }], stands: [{ st: 'СВ105', length_m: 10.5, embed_m: 2.5, height_m: 8 }] }, {});
+    eq(ok.length, 0, 'правдоподобные данные без замечаний');
+    return r.length + ' замечаний';
+  });
   t('Справочник подставляется в расчёт: стойка, несущая способность, кабель, провод', function(){
     var RF = window.PDRD_REFS;
     RF.STANDS.push({ st: 'ТЕСТ-СТОЙКА', width_m: 0.2, length_m: 10, embed_m: 2 });

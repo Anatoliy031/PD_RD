@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Справочник — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.7.1">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.7.2">
 <style>
 .tbl{overflow-x:auto;margin-top:8px}
 table{border-collapse:collapse;width:100%;font-size:13.5px}
@@ -33,6 +33,7 @@ details summary{cursor:pointer;font-weight:600}
       <button class="btn danger" id="bClear" type="button">Сбросить загруженный справочник</button>
     </div>
     <div id="msg"></div>
+    <div id="issues"></div>
   </section>
   <section class="panel">
     <h2>Что нужно для расчёта опоры</h2>
@@ -41,10 +42,10 @@ details summary{cursor:pointer;font-weight:600}
   <section class="panel" id="tables"></section>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="pdrd-core.js?v=1.7.1"></script>
-<script src="pdrd-refs-v25.js?v=1.7.1"></script>
-<script src="pdrd-refs.js?v=1.7.1"></script>
-<script src="pdrd-refs-io.js?v=1.7.1"></script>
+<script src="pdrd-core.js?v=1.7.2"></script>
+<script src="pdrd-refs-v25.js?v=1.7.2"></script>
+<script src="pdrd-refs.js?v=1.7.2"></script>
+<script src="pdrd-refs-io.js?v=1.7.2"></script>
 <script>
 (function(){
   var $ = function(id){ return document.getElementById(id); };
@@ -53,6 +54,13 @@ details summary{cursor:pointer;font-weight:600}
   var R = PDRD_REFS, V = PDRD_REFS_V25;
   function nf(v){ return v === null || v === undefined || v === '' ? '' : String(v).replace('.', ','); }
 
+  function showIssues(list){
+    var host = $('issues'); host.innerHTML = '';
+    if (!list.length){ host.appendChild(el('div','msg ok','Проверка справочника: замечаний нет.')); return; }
+    var box = el('div','msg warn'); box.appendChild(el('b','','Проверка справочника — замечаний: ' + list.length));
+    var ul = el('ul','gaps'); list.forEach(function(x){ ul.appendChild(el('li','', x.block + ': ' + x.text)); }); box.appendChild(ul);
+    host.appendChild(box);
+  }
   function needList(){
     var host = $('need'); host.innerHTML = '';
     var ul = el('ul','gaps');
@@ -118,6 +126,13 @@ details summary{cursor:pointer;font-weight:600}
         var r = PDRD_REFS_IO.parse(aoa);
         Object.keys(all).forEach(function(k){ all[k] = all[k].concat(r[k]); });
       });
+      var base = { poles: JSON.parse(JSON.stringify(V.POLES)), cables: JSON.parse(JSON.stringify(V.CABLES)) };
+      var issues = PDRD_REFS_IO.check(all, base);
+      showIssues(issues);
+      if (issues.length && !confirm('Проверка справочника нашла ' + issues.length + ' замечаний (список на странице). Значения, похожие на заполнение одним числом или рассчитанные по формуле, дадут неверный расчёт.\n\nЗагрузить справочник всё равно?')) {
+        msg('warn','Загрузка отменена. Исправьте замечания в файле и загрузите его снова.');
+        return;
+      }
       var cur = R.loadCustom() || {};
       Object.keys(all).forEach(function(k){
         var map = {};
@@ -144,6 +159,6 @@ details summary{cursor:pointer;font-weight:600}
   render();
 })();
 </script>
-<script src="pdrd-nav.js?v=1.7.1"></script>
+<script src="pdrd-nav.js?v=1.7.2"></script>
 </body>
 </html>

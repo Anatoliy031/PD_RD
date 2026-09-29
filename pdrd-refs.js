@@ -17,8 +17,8 @@ var SI = [{"name": "Склерометр (Измеритель прочност�
 var STANDS = [
   /* по данным филиала (Spravochnik_PD_RD.xlsx, Spravochnik_PD_RD_2.xlsx, лист «Стойки») */
   { st: 'СВ110-3,5', width_m: 0.185, length_m: 11, embed_m: 3.5, height_m: 7.5, source: 'справочник филиала' },
-  { st: 'СВ95-2', cx: 1.4, source: 'справочник филиала; ширина и высота над землёй не заданы' },
-  { st: 'СВ105', cx: 1.4, source: 'справочник филиала; ширина и высота над землёй не заданы' }
+  { st: 'СВ95-2', width_m: 0.165, length_m: 9.5, embed_m: 2, height_m: 7.5, cx: 1.4, source: 'справочник филиала (Spravochnik_PD_RD_3_filled.xlsx)' },
+  { st: 'СВ105', width_m: 0.205, length_m: 10.5, embed_m: 2.5, height_m: 8, cx: 1.4, source: 'справочник филиала (Spravochnik_PD_RD_3_filled.xlsx)' }
 ];
 var CAPACITY = [
   /* по данным филиала (Spravochnik_PD_RD_2.xlsx, лист «Несущая способность»);
