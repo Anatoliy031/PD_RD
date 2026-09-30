@@ -1087,65 +1087,203 @@ function crossProfile(d, mode) {
   return sh;
 }
 
+/* ---- графика типовых узлов: стойка в аксонометрии, штриховка, спиральные зажимы ---- */
+var OBL = { dx: 0.62, dy: -0.36 };        /* косоугольная проекция: смещение глубины */
+function prism(sh, x, yTop, w, h, dep, cut) {
+  /* лицевая грань, правая грань, верхняя грань; cut — обрыв снизу волнистой линией */
+  var ox = dep * OBL.dx, oy = dep * OBL.dy;
+  sh.line(x, yTop, x, yTop + h, 'ВЛ_ОПОРЫ', 0.5); sh.line(x + w, yTop, x + w, yTop + h, 'ВЛ_ОПОРЫ', 0.5);
+  sh.line(x + w + ox, yTop + oy, x + w + ox, yTop + h + oy, 'ВЛ_ОПОРЫ', 0.5);
+  sh.poly([[x, yTop], [x + ox, yTop + oy], [x + w + ox, yTop + oy], [x + w, yTop]], true, 'ВЛ_ОПОРЫ', 0.5);
+  sh.line(x, yTop, x + w, yTop, 'ВЛ_ОПОРЫ', 0.5);
+  if (cut) {
+    var pts = [], n = 8;
+    for (var i = 0; i <= n; i++) pts.push([x + (w + ox) * i / n, yTop + h + (i % 2 ? 1.2 : -1.2) + oy * i / n]);
+    sh.poly(pts, false, 'ВЛ_ОПОРЫ', 0.3);
+  } else sh.line(x, yTop + h, x + w, yTop + h, 'ВЛ_ОПОРЫ', 0.5);
+}
+function hatch(sh, pts, step) {
+  /* штриховка выпуклого многоугольника под 45° */
+  var xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; });
+  var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+  for (var c = x0 - (y1 - y0); c < x1; c += step) {
+    var p1 = [c, y1], p2 = [c + (y1 - y0), y0], seg = clipPoly(p1, p2, pts);
+    if (seg) sh.line(seg[0][0], seg[0][1], seg[1][0], seg[1][1], 'ВЛ_ОПОРЫ', 0.18);
+  }
+  sh.poly(pts, true, 'ВЛ_ОПОРЫ', 0.5);
+}
+function clipPoly(a, b, poly) {
+  /* отсечение отрезка выпуклым многоугольником (Cyrus–Beck) */
+  var t0 = 0, t1 = 1, d = [b[0] - a[0], b[1] - a[1]], n = poly.length;
+  var area = 0; for (var k = 0; k < n; k++) { var q1 = poly[k], q2 = poly[(k + 1) % n]; area += q1[0] * q2[1] - q2[0] * q1[1]; }
+  var sgn = area > 0 ? 1 : -1;
+  for (var i = 0; i < n; i++) {
+    var p = poly[i], q = poly[(i + 1) % n];
+    var nx = sgn * (q[1] - p[1]), ny = -sgn * (q[0] - p[0]);
+    var num2 = nx * (a[0] - p[0]) + ny * (a[1] - p[1]), den = nx * d[0] + ny * d[1];
+    if (Math.abs(den) < 1e-12) { if (num2 > 0) return null; continue; }
+    var tt = -num2 / den;
+    if (den < 0) { if (tt > t0) t0 = tt; } else { if (tt < t1) t1 = tt; }
+    if (t0 > t1) return null;
+  }
+  return [[a[0] + d[0] * t0, a[1] + d[1] * t0], [a[0] + d[0] * t1, a[1] + d[1] * t1]];
+}
+function spiral(sh, x1, y1, x2, y2, r) {
+  /* спиральный зажим (протектор): утолщение кабеля с витками */
+  var L = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / L, uy = (y2 - y1) / L, nx = -uy * r, ny = ux * r;
+  sh.poly([[x1 + nx, y1 + ny], [x2 + nx, y2 + ny], [x2 - nx, y2 - ny], [x1 - nx, y1 - ny]], true, 'ВОЛС', 0.35);
+  for (var s = 0; s < L; s += r * 1.1) {
+    var px = x1 + ux * s, py = y1 + uy * s;
+    sh.line(px + nx, py + ny, px + ux * r * 0.9 - nx, py + uy * r * 0.9 - ny, 'ВОЛС', 0.2);
+  }
+}
+function turnbuckle(sh, x, y, ang, len) {
+  var c = Math.cos(ang), s = Math.sin(ang), w = 1.4;
+  function P(u, v) { return [x + u * c - v * s, y + u * s + v * c]; }
+  sh.poly([P(0, 0), P(len * 0.2, -w), P(len * 0.8, -w), P(len, 0), P(len * 0.8, w), P(len * 0.2, w)], true, 'ВОЛС', 0.4);
+  sh.line(P(len * 0.35, -w)[0], P(len * 0.35, -w)[1], P(len * 0.35, w)[0], P(len * 0.35, w)[1], 'ВОЛС', 0.2);
+  sh.line(P(len * 0.65, -w)[0], P(len * 0.65, -w)[1], P(len * 0.65, w)[0], P(len * 0.65, w)[1], 'ВОЛС', 0.2);
+}
+function band(sh, x, y, w, dep) {
+  /* ленточный хомут на стойке: полоса по лицевой и боковой граням */
+  var ox = dep * OBL.dx, oy = dep * OBL.dy;
+  sh.line(x - 0.6, y, x + w, y, 'РАЗМЕРЫ', 0.6); sh.line(x + w, y, x + w + ox, y + oy, 'РАЗМЕРЫ', 0.6);
+  sh.line(x - 0.6, y + 1.4, x + w, y + 1.4, 'РАЗМЕРЫ', 0.3); sh.line(x + w, y + 1.4, x + w + ox, y + 1.4 + oy, 'РАЗМЕРЫ', 0.3);
+}
+function tag(sh, x1, y1, x2, y2, label, left) {
+  /* позиционная выноска: наклонная линия и полка с номером */
+  sh.line(x1, y1, x2, y2, 'РАЗМЕРЫ', 0.25);
+  var w2 = Math.max(6, tw(label, FS.text) + 2);
+  sh.line(x2, y2, left ? x2 - w2 : x2 + w2, y2, 'РАЗМЕРЫ', 0.25);
+  sh.text(left ? x2 - w2 / 2 : x2 + w2 / 2, y2 - 1, label, FS.text, { a: 'middle' });
+  sh.circle(x1, y1, 0.5, 'РАЗМЕРЫ', true);
+}
+function coil(sh, cx, cy, rx, ry, rot) {
+  [0, 1.2, 2.4, 3.6].forEach(function (k) { ellipse(sh, cx, cy, rx - k, ry - k, 'ВОЛС', k ? 0.3 : 0.5, rot); });
+  var a = rot * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  function E(u, v) { return [cx + u * c - v * s, cy + u * s + v * c]; }
+  var p1 = E(-rx, 0), p2 = E(rx, 0), p3 = E(0, -ry), p4 = E(0, ry);
+  sh.line(p1[0], p1[1], p2[0], p2[1], 'ВЛ_ОПОРЫ', 0.6); sh.line(p3[0], p3[1], p4[0], p4[1], 'ВЛ_ОПОРЫ', 0.6);
+  [p1, p2, p3, p4].forEach(function (q) { sh.line(q[0] - 1.5, q[1] - 1, q[0] + 1.5, q[1] + 1, 'ВЛ_ОПОРЫ', 0.6); });
+}
+function sleeveCyl(sh, cx, y, r, h) {
+  ellipse(sh, cx, y, r, r * 0.35, 'МУФТЫ', 0.5, 0);
+  sh.line(cx - r, y, cx - r, y + h, 'МУФТЫ', 0.5); sh.line(cx + r, y, cx + r, y + h, 'МУФТЫ', 0.5);
+  var pts = []; for (var i = 0; i <= 18; i++) { var u = Math.PI * i / 18; pts.push([cx + r * Math.cos(u), y + h + r * 0.35 * Math.sin(u)]); }
+  sh.poly(pts, false, 'МУФТЫ', 0.5);
+  sh.line(cx - r, y + h * 0.3, cx + r, y + h * 0.3, 'МУФТЫ', 0.25);
+}
+/* узел натяжной УН.П на лицевой грани стойки: пластина с болтами и проушинами */
+function tensNode(sh, x, y, w, dep, reach) {
+  var ox = dep * OBL.dx, oy = dep * OBL.dy;
+  sh.poly([[x - reach, y], [x + w + reach, y], [x + w + reach + 3, y - 2], [x - reach + 3, y - 2]], true, 'ВЛ_ОПОРЫ', 0.5);
+  sh.poly([[x - reach, y], [x + w + reach, y], [x + w + reach, y + 2.2], [x - reach, y + 2.2]], true, 'ВЛ_ОПОРЫ', 0.4);
+  [x - reach + 2.5, x + w + reach - 2.5].forEach(function (bx) { sh.circle(bx + 1, y - 1, 0.9, 'ВЛ_ОПОРЫ', false); });
+  sh.line(x + w + ox * 0.5, y - 1 + oy * 0.5, x + w + reach, y - 1, 'ВЛ_ОПОРЫ', 0.3);
+  return { left: [x - reach - 1, y + 1], right: [x + w + reach + 3, y - 1] };
+}
+
 function sleeveSheet(d) {
   var sh = new Sheet({ kind: 'typical', title: 'Натяжное крепление ОК с размещением муфты и запаса кабеля на стойке типа СВ' });
-  [[40, true], [175, false]].forEach(function (v2) {
-    var x = v2[0], withSleeve = v2[1];
-    stand(sh, x, 0, 170, 14);
-    sh.text(x - 36, 30, 'Стойка типа СВ', FS.text);
-    sh.rect(x - 16, 44, 32, 5, 'ВЛ_ОПОРЫ', 0.5);                          // узел натяжной
-    sh.line(x - 16, 46.5, x - 60, 70, 'ВОЛС', 0.8); sh.line(x + 16, 46.5, x + 60, 25, 'ВОЛС', 0.8);
-    sh.line(x - 34, 57, x - 44, 62, 'ВОЛС', 1.6); sh.line(x + 34, 36, x + 44, 31, 'ВОЛС', 1.6);   // натяжные комплекты
-    sh.poly([[x + 16, 50], [x + 22, 58], [x + 10, 72], [x + 8, 90]], false, 'ВОЛС', 0.6);           // шлейф
-    sh.rect(x + 6, 66, 4, 6, 'ВЛ_ОПОРЫ', 0.4);                                                   // зажим шлейфовый
-    ellipse(sh, x + 2, 118, 20, 26, 'ВОЛС', 0.6, -20);                                          // запас
-    ellipse(sh, x + 2, 118, 18, 24, 'ВОЛС', 0.4, -20);
-    sh.line(x - 10, 100, x + 14, 136, 'ВЛ_ОПОРЫ', 0.4); sh.line(x - 14, 118, x + 18, 118, 'ВЛ_ОПОРЫ', 0.4);
-    if (withSleeve) { sh.rect(x - 4, 92, 8, 18, 'МУФТЫ', 0.6); sh.text(x + 8, 104, 'муфта', FS.small, { l: 'МУФТЫ' }); }
-    [55, 98, 136].forEach(function (yy) { sh.line(x - 7, yy, x + 7, yy, 'РАЗМЕРЫ', 0.5); });   // хомуты
-    leader(sh, x - 12, 46, x - 30, 38, '1'); leader(sh, x + 40, 32, x + 50, 22, '2'); leader(sh, x + 10, 69, x + 32, 64, '3');
-    leader(sh, x + 20, 128, x + 32, 136, '4'); leader(sh, x - 7, 98, x - 30, 92, '5');
-    sh.text(x + 26, 50, 'шлейф ОК', FS.small);
-    sh.text(x, 186, withSleeve ? 'с муфтой и запасом кабеля' : 'с запасом кабеля без муфты', FS.text, { a: 'middle', b: true });
+  sh.text(165, -6, 'Натяжное крепление ОК с размещением муфты', FS.head, { a: 'middle' });
+  sh.text(165, 0, 'и запаса кабеля на стойке типа СВ', FS.head, { a: 'middle' });
+  [[70, true], [240, false]].forEach(function (v2) {
+    var x = v2[0], withSleeve = v2[1], W2 = 16, DEP = 12;
+    prism(sh, x, 8, W2, 205, DEP, true);
+    sh.text(x - 64, 42, 'Стойка типа СВ', FS.small);
+    var nd = tensNode(sh, x, 62, W2, DEP, 9);
+    /* левая ветвь кабеля: натяжной комплект со спиралью и талрепом */
+    turnbuckle(sh, nd.left[0], nd.left[1], Math.PI - 0.52, 12);
+    var lx = nd.left[0] - 12 * Math.cos(0.52), ly = nd.left[1] + 12 * Math.sin(0.52);
+    spiral(sh, lx, ly, lx - 34, ly + 20, 1.2);
+    sh.line(lx - 34, ly + 20, lx - 58, ly + 34, 'ВОЛС', 0.8);
+    /* правая ветвь */
+    turnbuckle(sh, nd.right[0], nd.right[1], -0.52, 10);
+    var rx = nd.right[0] + 10 * Math.cos(0.52), ry = nd.right[1] - 10 * Math.sin(0.52);
+    spiral(sh, rx, ry, rx + 34, ry - 20, 1.2);
+    sh.line(rx + 34, ry - 20, rx + 56, ry - 33, 'ВОЛС', 0.8);
+    /* шлейф ОК: от спиралей огибает стойку и уходит вниз к запасу */
+    sh.poly([[lx - 6, ly + 4], [x - 4, ly + 12], [x + W2 + 2, ly + 10], [x + W2 + 8, 88], [x + W2 + 6, 110], [x + W2 + 2, 124]], false, 'ВОЛС', 0.6);
+    sh.poly([[rx + 6, ry - 2], [x + W2 + 16, 72], [x + W2 + 12, 96], [x + W2 + 8, 122]], false, 'ВОЛС', 0.6);
+    /* зажим шлейфовый столбовой */
+    sh.rect(x + W2 + 4, 90, 4, 8, 'ВЛ_ОПОРЫ', 0.5); sh.line(x + W2, 92, x + W2 + 4, 92, 'ВЛ_ОПОРЫ', 0.4);
+    /* хомуты */
+    [94, 146, 178].forEach(function (yy) { band(sh, x, yy, W2, DEP); });
+    /* запас кабеля на устройстве */
+    coil(sh, x + W2 / 2 + 2, 162, 26, 34, -22);
+    if (withSleeve) sleeveCyl(sh, x + W2 / 2 + 12, 118, 5, 16);
+    /* выноски */
+    tag(sh, x - 4, 61, x - 18, 50, '1', true);
+    tag(sh, rx + 20, ry - 12, rx + 26, ry - 24, '2');
+    tag(sh, lx - 20, ly + 12, lx - 34, ly + 4, '2', true);
+    tag(sh, x + W2 + 7, 95, x + W2 + 28, 102, '3');
+    tag(sh, x + W2 / 2 + 26, 170, x + W2 / 2 + 40, 178, '4');
+    tag(sh, x, 95, x - 24, 104, '5', true);
+    tag(sh, x, 147, x - 24, 142, '5', true);
+    tag(sh, x, 179, x - 24, 186, '5', true);
+    tag(sh, x + W2 + 14, 80, x + W2 + 34, 72, 'шлейф ОК');
+    if (withSleeve) tag(sh, x + W2 / 2 + 16, 124, x + W2 / 2 + 40, 118, 'муфта');
+    sh.text(x + 8, 232, withSleeve ? 'с муфтой и запасом кабеля' : 'с запасом кабеля', FS.text, { a: 'middle', b: true });
   });
   var a = cat(d, 'node_tens'), b = cat(d, 'clamp_tens'), c = cat(d, 'loop_clamp'), e = cat(d, 'sleeve_holder'), f = cat(d, 'band');
-  nodeSpec(sh, 230, 40, [
+  nodeSpec(sh, 330, 60, [
     ['1', a.type || 'УН.П', 'Узел крепления натяжной', 1, a.mass || 3.7, 'шт.'],
     ['2', '', 'Натяжной комплект ' + (b.type || 'НК-1'), 1, '—', 'к-т'],
     ['3', c.type || 'ЗКШ-3-11/14-2', 'Зажим шлейфовый столбовой', 1, c.mass || 0.4, 'шт.'],
     ['4', e.type || 'УПМК (эконом)', 'Устройство для подвеса муфты', 1, e.mass || 3.2, 'шт.'],
     ['5', f.type || 'ТУ 3449-101-27560230-11', 'Хомут ленточный (лента 1,8 м × 1 + 1 замок)', 3, f.mass || 0.17, 'шт.']
   ]);
-  sh.note('Спецификация приведена на один узел. Марки изделий — по спецификации проекта; при замене — равноценными с документами соответствия.');
-  sh.note('Запас кабеля укладывается кольцами на устройство для запаса; радиус изгиба — не менее 20 диаметров кабеля.');
+  sh.note('Спецификация приведена на один узел. Марки изделий — по спецификации проекта.');
+  sh.note('Запас кабеля укладывается кольцами на устройство; радиус изгиба — не менее 20 диаметров кабеля.');
   fitSheet(sh);
   return sh;
 }
 
 function tensionScheme(d) {
   var sh = new Sheet({ kind: 'typical', title: 'Схема натяжного крепления ОК и обводки шлейфа на опорах ВЛ' });
-  stand(sh, 25, 10, 190, 6);
-  sh.line(22, 55, 0, 50, 'ВОЛС', 0.8); sh.line(28, 52, 55, 38, 'ВОЛС', 0.8);
-  sh.poly([[22, 55], [26, 62], [30, 56], [28, 52]], false, 'ВОЛС', 0.5);
-  leader(sh, 18, 55, 8, 70, '5'); leader(sh, 24, 58, 20, 75, '2'); leader(sh, 28, 58, 34, 72, '3'); leader(sh, 42, 45, 55, 58, '4');
-  sh.text(40, 62, 'ОК', FS.text);
+  sh.text(190, -6, 'Схема натяжного крепления ОК и обводки шлейфа на опорах ВЛ', FS.head, { a: 'middle' });
+  /* общий вид опоры */
+  prism(sh, 30, 20, 6, 200, 4, false);
+  var yN = 60;
+  sh.line(29, yN, 52, yN - 10, 'ВОЛС', 0.7); spiral(sh, 42, yN - 5, 58, yN - 12, 0.9);
+  sh.line(29, yN + 1, 8, yN - 2, 'ВОЛС', 0.7); spiral(sh, 18, yN - 1, 6, yN - 3, 0.9);
+  sh.poly([[29, yN + 1], [31, yN + 7], [36, yN + 4], [38, yN - 2]], false, 'ВОЛС', 0.5);
+  sh.poly([[28, yN - 1], [40, yN - 3], [41, yN + 1], [29, yN + 3]], true, 'ВЛ_ОПОРЫ', 0.4);
+  tag(sh, 14, yN - 1, 6, yN + 10, '5', true); tag(sh, 31, yN + 6, 26, yN + 16, '2', true); tag(sh, 36, yN + 4, 42, yN + 16, '3');
+  tag(sh, 54, yN - 11, 62, yN - 16, '4'); tag(sh, 38, yN + 2, 50, yN + 8, 'ОК');
   /* разрез 1-1 */
-  var cx = 110; sh.text(cx - 8, 55, '1–1', FS.text, { b: true });
-  sh.line(cx, 58, cx, 170, 'РАЗМЕРЫ', 0.25, true);
-  sh.text(cx - 38, 76, 'ось трассы ВЛ', FS.small); sh.text(cx - 38, 158, 'ось трассы ВЛ', FS.small);
-  sh.poly([[cx - 10, 105], [cx + 10, 105], [cx + 8, 125], [cx - 8, 125]], true, 'ВЛ_ОПОРЫ', 0.5);
-  sh.poly([[cx, 82], [cx + 16, 100], [cx + 16, 130], [cx, 150]], false, 'ВОЛС', 0.6);
-  leader(sh, cx + 2, 88, cx - 30, 92, '1'); leader(sh, cx + 2, 142, cx - 30, 138, '1');
-  /* схема монтажа УН.П, узел 1 */
-  var mx = 170;
-  sh.text(mx + 20, 20, 'Схема монтажа ' + (cat(d, 'node_tens').type || 'УН.П') + ', узел 1', FS.head);
-  sh.rect(mx + 40, 36, 30, 34, 'ВЛ_ОПОРЫ', 0.5); sh.rect(mx + 50, 50, 10, 6, 'ВЛ_ОПОРЫ', 0.3);
-  sh.line(mx, 42, mx + 40, 42, 'ВОЛС', 0.8); sh.line(mx + 70, 42, mx + 110, 42, 'ВОЛС', 0.8);
-  sh.poly([[mx + 22, 42], [mx + 30, 56], [mx + 80, 56], [mx + 88, 42]], false, 'ВОЛС', 0.6);
-  sh.text(mx + 88, 64, 'ОКСН', FS.small);
-  leader(sh, mx + 8, 42, mx, 32, '5'); leader(sh, mx + 95, 42, mx + 100, 30, '1');
+  var cx = 115;
+  sh.text(cx, 38, '1–1', FS.text, { a: 'middle', b: true }); sh.line(cx - 4, 39.5, cx + 4, 39.5, 'РАЗМЕРЫ', 0.3);
+  sh.line(cx, 44, cx, 170, 'РАЗМЕРЫ', 0.25, true);
+  tag(sh, cx, 58, cx - 30, 52, 'ось трассы ВЛ', true); tag(sh, cx, 158, cx - 30, 152, 'ось трассы ВЛ', true);
+  hatch(sh, [[cx - 11, 94], [cx + 11, 94], [cx + 9, 114], [cx - 9, 114]], 2.2);
+  sh.poly([[cx, 70], [cx + 2, 80], [cx + 12, 90], [cx + 16, 104], [cx + 12, 118], [cx + 2, 128], [cx, 138]], false, 'ВОЛС', 0.6);
+  [[cx, 70], [cx, 138]].forEach(function (q) { sh.poly([[q[0] - 1.4, q[1] + (q[1] < 100 ? -4 : 4)], [q[0], q[1]], [q[0] + 1.4, q[1] + (q[1] < 100 ? -4 : 4)]], false, 'ВОЛС', 0.4); });
+  sh.line(cx - 12, 94, cx - 12, 88, 'ВЛ_ОПОРЫ', 0.4); sh.line(cx + 12, 94, cx + 12, 88, 'ВЛ_ОПОРЫ', 0.4);
+  tag(sh, cx + 1, 84, cx - 26, 90, '1', true); tag(sh, cx + 1, 124, cx - 26, 130, '1', true);
+  /* схема монтажа, узел 1 */
+  var mx = 185, my = 30;
+  sh.text(mx + 75, my - 12, 'Схема монтажа', FS.head);
+  sh.text(mx + 75, my - 4, (cat(d, 'node_tens').type || 'УН.П') + '   Узел 1', FS.head);
+  sh.rect(mx + 55, my + 6, 34, 36, 'ВЛ_ОПОРЫ', 0.5); sh.rect(mx + 67, my + 24, 10, 7, 'ВЛ_ОПОРЫ', 0.4);
+  sh.line(mx + 72, my - 2, mx + 72, my + 50, 'РАЗМЕРЫ', 0.2, true);
+  sh.line(mx + 44, my + 10, mx + 100, my + 10, 'ВЛ_ОПОРЫ', 0.6);
+  [mx + 47, mx + 97].forEach(function (bx) { sh.circle(bx, my + 10, 1.2, 'ВЛ_ОПОРЫ', false); });
+  spiral(sh, mx + 2, my + 10, mx + 24, my + 10, 1); turnbuckle(sh, mx + 26, my + 10, 0, 16);
+  sh.line(mx + 42, my + 10, mx + 45, my + 10, 'ВОЛС', 0.6);
+  spiral(sh, mx + 120, my + 10, mx + 142, my + 10, 1); turnbuckle(sh, mx + 103, my + 10, 0, 16);
+  sh.line(mx - 8, my + 10, mx + 2, my + 10, 'ВОЛС', 0.8); sh.line(mx + 142, my + 10, mx + 152, my + 10, 'ВОЛС', 0.8);
+  sh.poly([[mx + 20, my + 12], [mx + 30, my + 32], [mx + 54, my + 44], [mx + 90, my + 44], [mx + 114, my + 32], [mx + 124, my + 12]], false, 'ВОЛС', 0.6);
+  tag(sh, mx + 8, my + 10, mx + 2, my + 2, '5', true); tag(sh, mx + 132, my + 10, mx + 128, my + 0, '1');
+  tag(sh, mx + 104, my + 40, mx + 120, my + 50, 'ОКСН');
+  /* аксонометрия узла на стойке */
+  var ax = 355;
+  prism(sh, ax, my - 6, 22, 58, 16, true);
+  sh.poly([[ax - 12, my + 12], [ax + 34 + 10, my + 12], [ax + 34 + 10 + 10 * OBL.dx, my + 12 + 10 * OBL.dy], [ax - 12 + 10 * OBL.dx, my + 12 + 10 * OBL.dy]], true, 'ВЛ_ОПОРЫ', 0.5);
+  [[ax - 8, my + 11], [ax + 38, my + 11]].forEach(function (q) { sh.circle(q[0], q[1] - 2, 1.2, 'ВЛ_ОПОРЫ', false); sh.line(q[0], q[1] - 2, q[0] + 10 * OBL.dx, q[1] - 2 + 10 * OBL.dy, 'ВЛ_ОПОРЫ', 0.4); });
+  tag(sh, ax + 44, my + 8, ax + 54, my - 2, '1');
   var a = cat(d, 'node_tens'), c = cat(d, 'loop_clamp'), f = cat(d, 'band'), b = cat(d, 'clamp_tens');
-  nodeSpec(sh, 170, 90, [
+  nodeSpec(sh, 190, 100, [
     ['1', a.type || 'УН.П', 'Узел натяжной для стоек прямоугольного сечения', 1, a.mass || 3.5, 'шт.'],
     ['2', c.type || 'ЗКШ-3-11/14-2', 'Зажим шлейфовый', 1, c.mass || 0.4, 'шт.'],
     ['3', f.type || 'ТУ 3449-101-27560230-11', 'Хомут ленточный (лента 1,5 м × 1 + 1 замок)', 1, f.mass || 0.17, 'к-т'],
@@ -1161,25 +1299,34 @@ function tensionScheme(d) {
 
 function suspensionScheme(d) {
   var sh = new Sheet({ kind: 'typical', title: 'Схема поддерживающего крепления ОК на опорах' });
-  stand(sh, 25, 10, 190, 6);
-  sh.rect(18, 60, 14, 3, 'ВЛ_ОПОРЫ', 0.4);
-  sh.line(5, 66, 50, 60, 'ВОЛС', 0.8);
-  leader(sh, 30, 60, 42, 52, '1'); leader(sh, 36, 64, 52, 66, '2'); sh.text(20, 76, 'ОК', FS.text);
-  var cx = 110;
-  sh.line(cx, 40, cx, 110, 'РАЗМЕРЫ', 0.25, true);
-  sh.text(cx - 38, 44, 'ось трассы ВЛ', FS.small); sh.text(cx - 38, 104, 'ось трассы ВЛ', FS.small);
-  sh.poly([[cx - 22, 62], [cx - 2, 62], [cx - 2, 82], [cx - 22, 82]], true, 'ВЛ_ОПОРЫ', 0.5);
-  sh.line(cx - 1, 62, cx + 2, 82, 'ВЛ_ОПОРЫ', 0.5); sh.circle(cx + 3, 84, 1.2, 'ВОЛС', true);
-  leader(sh, cx - 12, 62, cx - 6, 54, '2'); leader(sh, cx + 1, 70, cx + 12, 64, '3'); leader(sh, cx + 2, 78, cx + 12, 76, '1');
-  sh.text(cx + 8, 90, 'ОК', FS.text);
-  var mx = 170;
-  sh.text(mx + 10, 20, 'Схема монтажа ' + (cat(d, 'node_susp').type || 'УК-П-К'), FS.head);
-  sh.rect(mx + 40, 30, 26, 60, 'ВЛ_ОПОРЫ', 0.5);
-  sh.line(mx + 20, 48, mx + 90, 44, 'ВЛ_ОПОРЫ', 0.8);
-  sh.circle(mx + 53, 66, 4, 'ВОЛС', false); sh.line(mx + 10, 72, mx + 100, 60, 'ВОЛС', 0.8);
-  leader(sh, mx + 88, 44, mx + 100, 36, '1'); leader(sh, mx + 80, 63, mx + 100, 70, '2');
+  sh.text(175, -6, 'Схема поддерживающего крепления ОК на опорах', FS.head, { a: 'middle' });
+  /* общий вид опоры */
+  prism(sh, 30, 30, 6, 190, 4, false);
+  sh.line(20, 220, 60, 220, 'ВЛ_ОПОРЫ', 0.5); [24, 30, 36, 42].forEach(function (k) { sh.line(k, 220, k - 3, 223, 'ВЛ_ОПОРЫ', 0.25); });
+  sh.poly([[26, 68], [40, 66], [40, 68], [26, 70]], true, 'ВЛ_ОПОРЫ', 0.4);
+  sh.line(18, 74, 58, 66, 'ВОЛС', 0.8); sh.circle(38, 70, 1.1, 'ВОЛС', true);
+  tag(sh, 38, 67, 50, 58, '1'); tag(sh, 46, 69, 60, 72, '2'); tag(sh, 30, 72, 24, 84, 'ОК', true);
+  /* разрез */
+  var cx = 125;
+  sh.line(cx, 40, cx, 120, 'РАЗМЕРЫ', 0.25, true);
+  tag(sh, cx, 48, cx - 36, 42, 'ось трассы ВЛ', true); tag(sh, cx, 110, cx - 36, 104, 'ось трассы ВЛ', true);
+  hatch(sh, [[cx - 24, 64], [cx - 2, 64], [cx - 2, 86], [cx - 22, 86]], 2.2);
+  sh.line(cx - 1, 64, cx + 3, 86, 'ВЛ_ОПОРЫ', 0.6); sh.circle(cx + 4, 89, 1.3, 'ВОЛС', true);
+  tag(sh, cx - 12, 64, cx - 6, 54, '2'); tag(sh, cx + 1, 70, cx + 14, 64, '3'); tag(sh, cx + 3, 80, cx + 14, 76, '1'); tag(sh, cx + 4, 90, cx + 14, 96, 'ОК');
+  /* аксонометрия узла */
+  var ax = 250, ay = 40;
+  sh.text(ax - 10, ay - 22, 'Схема монтажа', FS.head);
+  sh.text(ax - 10, ay - 14, cat(d, 'node_susp').type || 'УК-П-К', FS.head);
+  prism(sh, ax, ay - 6, 26, 80, 18, true);
+  sh.poly([[ax - 22, ay + 26], [ax + 26 + 26, ay + 18], [ax + 52 + 10 * OBL.dx, ay + 18 + 10 * OBL.dy], [ax - 22 + 10 * OBL.dx, ay + 26 + 10 * OBL.dy]], true, 'ВЛ_ОПОРЫ', 0.5);
+  [[ax - 16, ay + 24], [ax + 46, ay + 17]].forEach(function (q) { sh.circle(q[0], q[1], 1.3, 'ВЛ_ОПОРЫ', false); });
+  sh.circle(ax + 13, ay + 52, 4.5, 'ВОЛС', false); sh.circle(ax + 13, ay + 52, 2.2, 'ВОЛС', false);
+  sh.line(ax + 13, ay + 29, ax + 13, ay + 47, 'ВЛ_ОПОРЫ', 0.5);
+  spiral(sh, ax - 30, ay + 62, ax + 60, ay + 44, 1.1);
+  sh.line(ax - 40, ay + 64, ax - 30, ay + 62, 'ВОЛС', 0.8); sh.line(ax + 60, ay + 44, ax + 72, ay + 42, 'ВОЛС', 0.8);
+  tag(sh, ax + 50, ay + 19, ax + 62, ay + 8, '1'); tag(sh, ax + 40, ay + 49, ax + 56, ay + 36, '2');
   var a = cat(d, 'node_susp'), b = cat(d, 'clamp_susp');
-  nodeSpec(sh, 170, 100, [
+  nodeSpec(sh, 200, 140, [
     ['1', a.type || 'УК-П-К', 'Узел крепления поддерживающий', 1, a.mass || 0.97, 'шт.'],
     ['2', '', 'Поддерживающий комплект ' + (b.type || 'ПК-1'), 1, '—', 'к-т']
   ]);
@@ -1191,7 +1338,9 @@ function suspensionScheme(d) {
 function typicalSheets(d) {
   var X = global.PDRD_DECIDE, out = [];
   if (!d.poles.some(onRoute)) return out;
-  var kvs = {}; d.lines.forEach(function (l) { if (l.cable !== false && l.kv !== null) kvs[+l.kv <= 1 ? 'lv' : 'hv'] = 1; });
+  var kvs = {};
+  d.lines.forEach(function (l) { var k = num(l.kv); if (l.cable !== false && k !== null) kvs[k <= 1 ? 'lv' : 'hv'] = 1; });
+  d.poles.forEach(function (p) { if (!onRoute(p)) return; (p.fromReport || []).forEach(function (r) { var k = num(r.kv); if (k !== null) kvs[k <= 1 ? 'lv' : 'hv'] = 1; }); });
   if (kvs.lv) out.push(crossProfile(d, '0,4'));
   if (kvs.lv && kvs.hv) out.push(crossProfile(d, '0,4-10'));
   var tt = X ? X.totals(d) : { nodes: {}, sleeves: 0 };

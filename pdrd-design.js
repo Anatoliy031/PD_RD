@@ -28,6 +28,8 @@ function inputs(d) {
   var cb = Object.assign({}, d.cable || {});
   var RFc = global.PDRD_REFS ? global.PDRD_REFS.cableOf(cb.mark) : null;
   if (RFc) {
+    if (num(cb.EA_kn) === null && num(RFc.EA_kn) !== null) cb.EA_kn = RFc.EA_kn;
+    if (num(cb.alpha_e6) === null && num(RFc.alpha_e6) !== null) cb.alpha_e6 = RFc.alpha_e6;
     if (num(cb.d_mm) === null) cb.d_mm = RFc.d;
     if (num(cb.mass_kg_km) === null) cb.mass_kg_km = RFc.m;
     if (num(cb.t_mdrn_kn) === null && num(cb.t_allow_kn) === null) cb.t_allow_kn = RFc.t;

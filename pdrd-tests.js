@@ -746,6 +746,24 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     eq(sh.slice(-5).every(function(s){ return s.meta.kind === 'typical'; }), true, 'листы в конце комплекта');
     return '5 листов';
   });
+  t('Профили пересечения строятся, когда класс напряжения записан текстом («0,4», «10»)', function(){
+    var d0 = window.PDRD_DEMO.build();
+    d0.lines.forEach(function(l){ l.kv = String(l.kv).replace('.', ','); });
+    d0.poles.forEach(function(p){ (p.fromReport || []).forEach(function(r){ r.kv = String(r.kv).replace('.', ','); }); });
+    PDRD_SVG.reset(d0);
+    var n = PDRD_SVG.sheets(d0).filter(function(s){ return /Профиль пересечения/.test(s.meta.title); }).length;
+    eq(n, 2, 'оба профиля'); return n + ' листа';
+  });
+  t('Кабель ДПТс-П-32У(4х8): EA и ТКЛР из данных изготовителя — монтажные таблицы рассчитываются', function(){
+    var c = PDRD_REFS_V25.cableByMark('ДПТс-П-32У(4х8)');
+    near(c.EA_kn, 506.8, 0.1, 'EA'); near(c.alpha_e6, 21.97, 1e-9, 'ТКЛР');
+    var d0 = window.PDRD_DEMO.build(); d0.cable = Object.assign({}, d0.cable, { mark:'ДПТс-П-32У(4х8)', EA_kn:null, alpha_e6:null, t_mdrn_kn:null, t_allow_kn:null, d_mm:null, mass_kg_km:null });
+    eq(PDRD_DESIGN.inputs(d0).miss.length, 0, 'данных кабеля достаточно');
+    PDRD_SVG.reset(d0);
+    var m = PDRD_SVG.sheets(d0).filter(function(s){ return s.meta.kind === 'montage'; });
+    eq(m.length > 0 && !/не хватает/.test(m[0].notes.join(' ')), true, 'таблицы рассчитаны');
+    return 'EA = 506,8 кН';
+  });
   t('Монтажные таблицы строятся и при неполных данных (форма с перечнем недостающего)', function(){
     var d0 = window.PDRD_DEMO.build(); d0.cable.EA_kn = null; PDRD_SVG.reset(d0);
     var m = PDRD_SVG.sheets(d0).filter(function(s){ return s.meta.kind === 'montage'; });
