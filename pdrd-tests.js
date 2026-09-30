@@ -732,6 +732,35 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     eq(dd.tables['Е1'].rows.some(function(r){ return /не проходит по допустимой нагрузке/.test(r[2]); }), true, 'в Е.1');
     return st.length + ' опор с подпором';
   });
+  t('Типовые листы филиала: профили пересечения и схемы креплений со спецификацией', function(){
+    PDRD_SVG.reset(demo);
+    var sh = PDRD_SVG.sheets(demo), titles = sh.map(function(s){ return s.meta.title; }).join(' | ');
+    ['Профиль пересечения с автодорогой в пролёте опор ВЛ 0,4 кВ', 'Профиль пересечения с автодорогой в пролёте опор ВЛ 0,4–10 кВ',
+     'Натяжное крепление ОК с размещением муфты и запаса кабеля на стойке типа СВ', 'Схема натяжного крепления ОК и обводки шлейфа на опорах ВЛ',
+     'Схема поддерживающего крепления ОК на опорах'].forEach(function(n){ if (titles.indexOf(n) < 0) throw new Error('нет листа: ' + n); });
+    var prof = sh.filter(function(s){ return /Профиль пересечения/.test(s.meta.title); })[0];
+    eq(prof.notes.some(function(n){ return /2\.5\.197/.test(n) && /0,6 м/.test(n); }), true, 'примечание ПУЭ 2.5.197');
+    var ten = sh.filter(function(s){ return /Схема натяжного крепления/.test(s.meta.title); })[0];
+    eq(ten.notes.length >= 3, true, 'три примечания');
+    eq(ten.p.some(function(e){ return e.t === 'text' && /Зажим шлейфовый/.test(e.s); }), true, 'спецификация на листе');
+    eq(sh.slice(-5).every(function(s){ return s.meta.kind === 'typical'; }), true, 'листы в конце комплекта');
+    return '5 листов';
+  });
+  t('Монтажные таблицы строятся и при неполных данных (форма с перечнем недостающего)', function(){
+    var d0 = window.PDRD_DEMO.build(); d0.cable.EA_kn = null; PDRD_SVG.reset(d0);
+    var m = PDRD_SVG.sheets(d0).filter(function(s){ return s.meta.kind === 'montage'; });
+    eq(m.length > 0, true, 'листы есть'); eq(/не хватает исходных данных/.test(m[0].notes[0]), true, 'перечень данных');
+    return m.length + ' листов формы';
+  });
+  t('Спецификация: зажим шлейфовый и типовые марки филиала по умолчанию', function(){
+    var d0 = window.PDRD_DEMO.build(); d0.specCatalog = {};
+    var by = {}; PDRD_SPEC.build(d0).items.forEach(function(x){ by[x.key] = x; });
+    eq(!!by.loop_clamp, true, 'зажим шлейфовый');
+    eq(by.node_tens.type, 'УН.П', 'узел натяжной'); eq(by.node_susp.type, 'УК-П-К', 'узел поддерживающий');
+    eq(by.clamp_tens.type, 'НК-1', 'натяжной комплект'); eq(by.clamp_susp.type, 'ПК-1', 'поддерживающий комплект');
+    eq(by.sleeve_holder.type, 'УПМК (эконом)', 'устройство для муфты'); eq(by.loop_clamp.type, 'ЗКШ-3-11/14-2', 'шлейфовый');
+    return 'марки подставлены';
+  });
   t('Справочник: колонки тяжения на вершине и с подпором', function(){
     var r = window.PDRD_REFS_IO.parse([['Марка опоры', 'Несущая способность конструкции (с подкосом), кН·м', 'Максимально допустимое горизонтальное тяжение, кН, приложенное к вершине', 'Максимально допустимое горизонтальное тяжение опоры с подпором, кН, приложенное к вершине'], ['А8-1', 20, 9.5, ''], ['П8-1', '', '', 6]]);
     eq(r.capacity[0].T_top_kn, 9.5, 'тяжение на вершине'); eq(r.capacity[1].T_top_strut_kn, 6, 'с подпором');

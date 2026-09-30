@@ -18,6 +18,7 @@ var ITEMS = {
   node_tens:      { name: 'Узел крепления натяжной (кронштейн) для крепления к стойке опоры', unit: 'шт.' },
   turnbuckle:     { name: 'Талреп (регулируемое натяжное звено)', unit: 'шт.' },
   link:           { name: 'Звено промежуточное', unit: 'шт.' },
+  loop_clamp:     { name: 'Зажим шлейфовый столбовой', unit: 'шт.' },
   band:           { name: 'Лента крепёжная (бандажная) из нержавеющей стали', unit: 'м' },
   buckle:         { name: 'Скрепа (замок) для крепёжной ленты', unit: 'шт.' },
   sleeve_holder:  { name: 'Устройство (кронштейн) для подвески оптической муфты на опоре', unit: 'шт.' },
@@ -33,10 +34,10 @@ var ITEMS = {
 var NODE_KIT = {
   'П':  [['clamp_susp', 1], ['node_susp', 1]],
   'ПУ': [['clamp_susp', 1], ['node_susp', 1]],
-  'А2': [['clamp_tens', 2], ['node_tens', 2], ['turnbuckle', 2], ['link', 2]],
+  'А2': [['clamp_tens', 2], ['node_tens', 2], ['turnbuckle', 2], ['link', 2], ['loop_clamp', 1]],
   'А1': [['clamp_tens', 1], ['node_tens', 1], ['turnbuckle', 1], ['link', 1]],
-  'АО': [['clamp_tens', 3], ['node_tens', 3], ['turnbuckle', 3], ['link', 3]],
-  'С':  [['clamp_tens', 2], ['node_tens', 2], ['turnbuckle', 2], ['link', 2], ['sleeve_holder', 1], ['reserve_holder', 1]]
+  'АО': [['clamp_tens', 3], ['node_tens', 3], ['turnbuckle', 3], ['link', 3], ['loop_clamp', 1]],
+  'С':  [['clamp_tens', 2], ['node_tens', 2], ['turnbuckle', 2], ['link', 2], ['loop_clamp', 1], ['sleeve_holder', 1], ['reserve_holder', 1]]
 };
 /* Число кронштейнов (бандажей) в узле — по ним считаются лента и скрепы */
 var NODE_BRACKETS = { 'П': 1, 'ПУ': 1, 'А1': 1, 'А2': 2, 'АО': 3, 'С': 4 };
@@ -103,9 +104,23 @@ function lengths(d) {
            buildLengths: builds, eku: sleeves.length + 1, params: sp, declared_m: declared, short_m: short };
 }
 
+/* Типовые узлы филиала (листы «Схема натяжного крепления…», «Схема поддерживающего
+   крепления…», «Натяжное крепление ОК с муфтой…»): марки по умолчанию, если в проекте
+   не указаны другие. */
+var BRANCH_CATALOG = {
+  node_tens:     { type: 'УН.П', mass: 3.5, note: 'узел натяжной для стоек прямоугольного сечения' },
+  clamp_tens:    { type: 'НК-1', mass: '', note: 'натяжной комплект; применять согласно монтажной ведомости' },
+  node_susp:     { type: 'УК-П-К', mass: 0.97, note: 'узел крепления поддерживающий' },
+  clamp_susp:    { type: 'ПК-1', mass: '', note: 'поддерживающий комплект' },
+  loop_clamp:    { type: 'ЗКШ-3-11/14-2', mass: 0.4, note: 'зажим шлейфовый' },
+  sleeve_holder: { type: 'УПМК (эконом)', mass: 3.2, note: 'устройство для подвеса муфты' },
+  band:          { type: 'ТУ 3449-101-27560230-11', mass: 0.17, note: 'хомут ленточный (лента + замок)' }
+};
 function catalogOf(d, key) {
-  var c = (d.specCatalog || {})[key] || {};
-  return { type: c.type || '', code: c.code || '', maker: c.maker || '', mass: c.mass || '', note: c.note || '' };
+  var c = (d.specCatalog || {})[key] || {}, b = BRANCH_CATALOG[key] || {};
+  var own = !!(c.type);
+  return { type: c.type || b.type || '', code: c.code || '', maker: c.maker || '', mass: c.mass || (own ? '' : (b.mass || '')),
+           note: c.note || (own ? '' : (b.note || '')), branch: !own && !!b.type };
 }
 
 function build(d) {
@@ -131,7 +146,7 @@ function build(d) {
     brackets += (NODE_BRACKETS[code] || 1) * t.nodes[code];
   });
   var nodesAll = Object.keys(t.nodes).reduce(function (a, k) { return a + t.nodes[k]; }, 0);
-  ['clamp_susp', 'node_susp', 'clamp_tens', 'node_tens', 'turnbuckle', 'link', 'sleeve_holder', 'reserve_holder'].forEach(function (k) {
+  ['clamp_susp', 'node_susp', 'clamp_tens', 'node_tens', 'turnbuckle', 'link', 'loop_clamp', 'sleeve_holder', 'reserve_holder'].forEach(function (k) {
     add(k, qty[k] || 0, { note: k === 'clamp_tens' ? 'заделка не менее 90 % разрывной прочности кабеля (ТТ № 282р, п. 3.3)' : '' });
   });
   add('band', Math.ceil(brackets * sp.bandPerBracket_m), { note: 'крепление кронштейнов узлов к стойкам опор, ' + String(sp.bandPerBracket_m).replace('.', ',') + ' м на кронштейн' });
@@ -176,5 +191,5 @@ function bor(d, spec) {
   return rows;
 }
 
-global.PDRD_SPEC = { INCL: INCL, NODE_KIT: NODE_KIT, ITEMS: ITEMS, NODE_BRACKETS: NODE_BRACKETS, catalogOf: catalogOf, specParams: specParams, cableSpans: cableSpans, lengths: lengths, build: build, bor: bor };
+global.PDRD_SPEC = { BRANCH_CATALOG: BRANCH_CATALOG, INCL: INCL, NODE_KIT: NODE_KIT, ITEMS: ITEMS, NODE_BRACKETS: NODE_BRACKETS, catalogOf: catalogOf, specParams: specParams, cableSpans: cableSpans, lengths: lengths, build: build, bor: bor };
 })(typeof window !== 'undefined' ? window : globalThis);

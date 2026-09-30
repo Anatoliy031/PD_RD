@@ -790,8 +790,9 @@ function nodeSheets(d) {
 function montageSheets(d) {
   var D = global.PDRD_DESIGN, C = global.PDRD_CALC, res = d.calcResult;
   if (!D || !C || !res) return [];
-  var inp = D.inputs(d); if (inp.miss.length) return [];
-  var reg; try { reg = C.regimes({ tMax: inp.tMax, tMin: inp.tMin, tAvg: inp.tAvg, altitude: inp.altitude }); } catch (e) { return []; }
+  var inp = D.inputs(d);
+  var reg = null; try { reg = C.regimes({ tMax: inp.tMax, tMin: inp.tMin, tAvg: inp.tAvg, altitude: inp.altitude }); } catch (e) { reg = null; }
+  if (inp.miss.length || !reg) return montageForm(d, D.sections(d), inp);
   var secs = D.sections(d), out = [], sh = null, y = 0, rowH = 5.5, colW = 30, w0 = 60;
   var maxY = 210;
   secs.forEach(function (s) {
@@ -833,6 +834,41 @@ function montageSheets(d) {
   out.forEach(function (x) {
     x.note('Стрела провеса f — в середине пролёта при температуре монтажа; тяжение H — горизонтальная составляющая, одна на анкерный участок.');
     x.note('Монтаж выполнять с контролем тяжения динамометром; значения — расчёт PD_RD по ПУЭ-7, пп. 2.5.71, 2.5.185.');
+    fitSheet(x, { max: 1.6 });
+  });
+  return out;
+}
+
+/* Монтажные таблицы при неполных исходных данных: форма с анкерными участками и
+   пролётами, значения — после ввода данных; перечень недостающих данных — в примечаниях */
+function montageForm(d, secs, inp) {
+  if (!secs.length) return [];
+  var out = [], sh = null, y = 0, rowH = 5.5, colW = 30, w0 = 60, maxY = 210;
+  var temps = [];
+  var tMin = inp.tMin !== null ? inp.tMin : -30, tMax = inp.tMax !== null ? inp.tMax : 40;
+  for (var t0 = Math.ceil(tMin / 10) * 10; t0 <= tMax; t0 += 10) temps.push(t0);
+  secs.forEach(function (s) {
+    var spans = s.spans.slice(0, 10), nRows = spans.length + 2;
+    if (!sh || y + rowH * nRows + 12 > maxY) { sh = new Sheet({ kind: 'montage', title: 'Монтажные таблицы стрел провеса и тяжений' }); out.push(sh); y = 0; }
+    sh.text(0, y + FS.text, s.id + ' — ' + clip(s.line, 150, FS.text) + '; приведённый пролёт ' + fm(s.Lr, 1) + ' м', FS.text, { b: true });
+    var y0 = y + FS.text + 2.5, tblW = w0 + temps.length * colW;
+    sh.rect(0, y0, tblW, rowH * nRows, 'РАЗМЕРЫ', 0.4);
+    for (var r2 = 1; r2 < nRows; r2++) sh.line(0, y0 + r2 * rowH, tblW, y0 + r2 * rowH, 'РАЗМЕРЫ', 0.2);
+    for (var c3 = 0; c3 <= temps.length; c3++) sh.line(w0 + c3 * colW, y0, w0 + c3 * colW, y0 + rowH * nRows, 'РАЗМЕРЫ', c3 === 0 ? 0.4 : 0.2);
+    var base = y0 + rowH * 0.72;
+    sh.text(1.2, base, 'Пролёт / температура, °C', FS.small, { max: w0 - 2.4 });
+    temps.forEach(function (tv, i2) { sh.text(w0 + i2 * colW + colW / 2, base, String(tv), FS.small, { a: 'middle' }); });
+    sh.text(1.2, base + rowH, 'Тяжение H, кН', FS.small, { max: w0 - 2.4 });
+    temps.forEach(function (tv, i3) { sh.text(w0 + i3 * colW + colW / 2, base + rowH, '—', FS.small, { a: 'middle' }); });
+    spans.forEach(function (sp, k) {
+      var yy = base + rowH * (k + 2);
+      sh.text(1.2, yy, clip(sp.from.rec.num + '–' + sp.to.rec.num + ' (' + fm(sp.L, 0) + ' м), стрела f, м', w0 - 2.4, FS.small), FS.small);
+      temps.forEach(function (tv, i4) { sh.text(w0 + i4 * colW + colW / 2, yy, '—', FS.small, { a: 'middle' }); });
+    });
+    y = y0 + rowH * nRows + 6;
+  });
+  out.forEach(function (x) {
+    x.note('Значения стрел провеса и тяжений не рассчитаны: не хватает исходных данных — ' + inp.miss.map(function (m) { return m.text; }).join('; ') + '. Таблицы заполнятся автоматически после ввода данных на странице «Расчёты»; выпуск до этого заблокирован.');
     fitSheet(x, { max: 1.6 });
   });
   return out;
@@ -950,8 +986,223 @@ function posSheets(d) {
   return [sh];
 }
 
+/* ---------------------------------------------------------------- типовые листы филиала */
+function ellipse(sh, cx, cy, rx, ry, layer, w, rot) {
+  var pts = [], a = (rot || 0) * Math.PI / 180;
+  for (var i = 0; i <= 36; i++) {
+    var u = i / 36 * 2 * Math.PI, x = rx * Math.cos(u), y = ry * Math.sin(u);
+    pts.push([cx + x * Math.cos(a) - y * Math.sin(a), cy + x * Math.sin(a) + y * Math.cos(a)]);
+  }
+  sh.poly(pts, false, layer, w);
+}
+function leader(sh, x1, y1, x2, y2, label) {
+  sh.line(x1, y1, x2, y2, 'РАЗМЕРЫ', 0.25);
+  sh.line(x2, y2, x2 + tw(label, FS.text) + 2, y2, 'РАЗМЕРЫ', 0.25);
+  sh.text(x2 + 1, y2 - 1, label, FS.text, { l: 'ТЕКСТ' });
+}
+function dimV(sh, x, y1, y2, label) {
+  sh.line(x, y1, x, y2, 'РАЗМЕРЫ', 0.25);
+  sh.line(x - 1.5, y1, x + 1.5, y1, 'РАЗМЕРЫ', 0.25); sh.line(x - 1.5, y2, x + 1.5, y2, 'РАЗМЕРЫ', 0.25);
+  sh.text(x - 1.5, (y1 + y2) / 2, label, FS.text, { a: 'middle', rot: -90, l: 'РАЗМЕРЫ' });
+}
+/* Таблица спецификации узла на листе */
+function nodeSpec(sh, x, y, rows) {
+  var cols = [[10, 'Поз.'], [42, 'Обозначение'], [62, 'Наименование'], [12, 'Кол.'], [16, 'Масса ед., кг'], [18, 'Примечание']];
+  var W2 = cols.reduce(function (a, c) { return a + c[0]; }, 0), rh = 8;
+  sh.rect(x, y, W2, rh * (rows.length + 1), 'РАЗМЕРЫ', 0.4);
+  var cx = x;
+  cols.forEach(function (c, i) {
+    if (i) sh.line(cx, y, cx, y + rh * (rows.length + 1), 'РАЗМЕРЫ', 0.25);
+    sh.text(cx + c[0] / 2, y + rh * 0.65, c[1], FS.small, { a: 'middle', max: c[0] - 1 });
+    cx += c[0];
+  });
+  rows.forEach(function (r, k) {
+    var yy = y + rh * (k + 1);
+    sh.line(x, yy, x + W2, yy, 'РАЗМЕРЫ', k ? 0.25 : 0.4);
+    var cx2 = x;
+    r.forEach(function (v, i) {
+      var c = cols[i], txt = v === null || v === undefined ? '' : String(v).replace('.', ',');
+      if (i === 2 && tw(txt, FS.small) > c[0] - 2) {
+        var cut = Math.floor((c[0] - 2) / (FS.small * 0.6)), sp = txt.lastIndexOf(' ', cut);
+        if (sp < 10) sp = cut;
+        sh.text(cx2 + 1, yy + rh * 0.42, txt.slice(0, sp), FS.small, { max: c[0] - 2 });
+        sh.text(cx2 + 1, yy + rh * 0.85, txt.slice(sp).trim(), FS.small, { max: c[0] - 2 });
+      } else sh.text(i === 2 ? cx2 + 1 : cx2 + c[0] / 2, yy + rh * 0.65, txt, FS.small, { a: i === 2 ? 'start' : 'middle', max: c[0] - 2 });
+      cx2 += c[0];
+    });
+  });
+  return { w: W2, h: rh * (rows.length + 1) };
+}
+function cat(d, key) { var S = global.PDRD_SPEC; return S ? S.catalogOf(d, key) : { type: '', mass: '' }; }
+function stand(sh, x, yTop, yBase, w) {
+  sh.rect(x - w / 2, yTop, w, yBase - yTop, 'ВЛ_ОПОРЫ', 0.6);
+  sh.line(x - 14, yBase, x + 14, yBase, 'ВЛ_ОПОРЫ', 0.5);
+  [-10, -4, 2, 8].forEach(function (k) { sh.line(x + k, yBase, x + k - 3, yBase + 3, 'ВЛ_ОПОРЫ', 0.25); });
+}
+function polePic(sh, x, yTop, yBase, label, kv10) {
+  sh.rect(x - 2, yTop, 4, yBase - yTop + 8, 'ВЛ_ОПОРЫ', 0.5);
+  sh.line(x - 7, yTop + 3, x + 7, yTop + 3, 'ВЛ_ОПОРЫ', 0.5);
+  [-6, 6].forEach(function (k) { sh.circle(x + k, yTop + 1.2, 1.1, 'ВЛ_ОПОРЫ', false); });
+  if (kv10) { sh.line(x, yTop - 6, x, yTop, 'ВЛ_ОПОРЫ', 0.5); sh.circle(x, yTop - 7, 1.2, 'ВЛ_ОПОРЫ', false); }
+  wrap(sh, label, x, yTop - (kv10 ? 20 : 14), FS.text, 50, 3, 'ТЕКСТ');
+}
+
+/* Профиль пересечения с автодорогой. kvs: '0,4' или '0,4-10' */
+function crossProfile(d, mode) {
+  var N = global.PDRD_NORMS, cr = (global.PDRD_TEXTS ? global.PDRD_TEXTS.crossings(d) : (d.crossings || []))
+    .filter(function (c) { return /дорог|шоссе|трасс/i.test((c.object || '') + ' ' + (c.kind || '')); });
+  var hC = num((d.designDefaults || {}).cableH) || 6, g = N.val('tt.dist.ground').value;
+  var c0 = cr[0] || null;
+  var title = mode === '0,4' ? 'Профиль пересечения с автодорогой в пролёте опор ВЛ 0,4 кВ ПАО «Россети Юг» — «Кубаньэнерго»'
+                             : 'Профиль пересечения с автодорогой в пролёте опор ВЛ 0,4–10 кВ ПАО «Россети Юг» — «Кубаньэнерго»';
+  var sh = new Sheet({ kind: 'typical', title: title });
+  var xL = 30, xR = 290, base = 140, v = 12;           // 1 м = 12 мм по вертикали
+  var yA = base - hC * v;
+  polePic(sh, xL, yA - 8, base, 'Опора ВЛ-0,4 кВ ПАО «Россети Юг»', false);
+  polePic(sh, xR, yA - 8, base, mode === '0,4' ? 'Опора ВЛ-0,4 кВ ПАО «Россети Юг»' : 'Опора ВЛ-10 кВ ПАО «Россети Юг»', mode !== '0,4');
+  sh.line(xL - 20, base, xR + 20, base, 'РАЗМЕРЫ', 0.5);
+  [xL, xR].forEach(function (x) { sh.circle(x, yA, 3, 'ВОЛС', false); sh.circle(x, yA, 1.6, 'ВОЛС', false); });
+  var fN = c0 && c0.fmax ? c0.fmax * 0.6 : (hC - g) * 0.35, fM = c0 && c0.fmax ? c0.fmax : (hC - g) * 0.8;
+  function sagCurve(f, dash) {
+    var pts = [];
+    for (var i = 0; i <= 30; i++) { var s = i / 30; pts.push([xL + (xR - xL) * s, yA + 4 * s * (1 - s) * f * v]); }
+    sh.poly(pts, false, 'ВОЛС', 0.7, dash);
+  }
+  sagCurve(fN, false); sagCurve(fM, false);
+  var mid = (xL + xR) / 2, yMax = yA + fM * v;
+  sh.poly([[mid - 24, base], [mid - 18, base - 3], [mid + 18, base - 3], [mid + 24, base]], true, 'ПЕРЕСЕЧЕНИЯ', 0.6);
+  leader(sh, mid - 5, base - 2, mid - 90, base - 14, 'А/дорога' + (c0 ? ' (' + clip(c0.object, 40, FS.text) + ')' : ''));
+  leader(sh, mid - 25, yA + 4 * 0.4 * 0.6 * fN * v, mid - 70, yA - 14, 'Проектируемый ВОК в режиме нормальной нагрузки');
+  leader(sh, mid - 30, yA + fM * v * 0.9, mid - 90, yMax + 18, 'Проектируемый ВОК в режиме наибольшей нагрузки');
+  dimV(sh, mid + 35, yMax, base - 3, 'не менее ' + fm(g, 1) + ' м');
+  dimV(sh, xL - 10, yA, base, fm(hC, 1) + ' м');
+  dimV(sh, xR + 10, yA, base, fm(hC, 1) + ' м');
+  sh.line(xL, base + 14, xR, base + 14, 'РАЗМЕРЫ', 0.25);
+  [xL, xR].forEach(function (x) { sh.line(x, base + 10, x, base + 17, 'РАЗМЕРЫ', 0.25); });
+  sh.text(mid, base + 12.5, 'Длина пролёта' + (c0 && c0.L ? ' ' + fm(c0.L, 0) + ' м' : ''), FS.text, { a: 'middle' });
+  sh.note('Стрела провеса проектируемого кабеля указана при нормальных условиях. Согласно ПУЭ (7 издание), пункт 2.5.197, расстояние от фазных проводов до волоконно-оптического кабеля на опорах ВЛ до 35 кВ должно быть не менее 0,6 м.');
+  if (c0) sh.note('Пересечение: ' + (c0.line || '') + ', пролёт ' + c0.from + ' — ' + c0.to + '; требуемый габарит ' + fm(num(c0.h_req_m), 2) + ' м (' + (c0.ref || '') + ')' + (c0.h_calc_m ? '; расчётный ' + fm(c0.h_calc_m, 2) + ' м' : '') + '.');
+  else sh.note('Типовой профиль: высота подвеса — по проекту (' + fm(hC, 1) + ' м), габарит до проезжей части — не менее ' + fm(g, 1) + ' м (ТТ № 282р, п. 3.2.4; ПУЭ-7, п. 2.5.197).');
+  fitSheet(sh);
+  return sh;
+}
+
+function sleeveSheet(d) {
+  var sh = new Sheet({ kind: 'typical', title: 'Натяжное крепление ОК с размещением муфты и запаса кабеля на стойке типа СВ' });
+  [[40, true], [175, false]].forEach(function (v2) {
+    var x = v2[0], withSleeve = v2[1];
+    stand(sh, x, 0, 170, 14);
+    sh.text(x - 36, 30, 'Стойка типа СВ', FS.text);
+    sh.rect(x - 16, 44, 32, 5, 'ВЛ_ОПОРЫ', 0.5);                          // узел натяжной
+    sh.line(x - 16, 46.5, x - 60, 70, 'ВОЛС', 0.8); sh.line(x + 16, 46.5, x + 60, 25, 'ВОЛС', 0.8);
+    sh.line(x - 34, 57, x - 44, 62, 'ВОЛС', 1.6); sh.line(x + 34, 36, x + 44, 31, 'ВОЛС', 1.6);   // натяжные комплекты
+    sh.poly([[x + 16, 50], [x + 22, 58], [x + 10, 72], [x + 8, 90]], false, 'ВОЛС', 0.6);           // шлейф
+    sh.rect(x + 6, 66, 4, 6, 'ВЛ_ОПОРЫ', 0.4);                                                   // зажим шлейфовый
+    ellipse(sh, x + 2, 118, 20, 26, 'ВОЛС', 0.6, -20);                                          // запас
+    ellipse(sh, x + 2, 118, 18, 24, 'ВОЛС', 0.4, -20);
+    sh.line(x - 10, 100, x + 14, 136, 'ВЛ_ОПОРЫ', 0.4); sh.line(x - 14, 118, x + 18, 118, 'ВЛ_ОПОРЫ', 0.4);
+    if (withSleeve) { sh.rect(x - 4, 92, 8, 18, 'МУФТЫ', 0.6); sh.text(x + 8, 104, 'муфта', FS.small, { l: 'МУФТЫ' }); }
+    [55, 98, 136].forEach(function (yy) { sh.line(x - 7, yy, x + 7, yy, 'РАЗМЕРЫ', 0.5); });   // хомуты
+    leader(sh, x - 12, 46, x - 30, 38, '1'); leader(sh, x + 40, 32, x + 50, 22, '2'); leader(sh, x + 10, 69, x + 32, 64, '3');
+    leader(sh, x + 20, 128, x + 32, 136, '4'); leader(sh, x - 7, 98, x - 30, 92, '5');
+    sh.text(x + 26, 50, 'шлейф ОК', FS.small);
+    sh.text(x, 186, withSleeve ? 'с муфтой и запасом кабеля' : 'с запасом кабеля без муфты', FS.text, { a: 'middle', b: true });
+  });
+  var a = cat(d, 'node_tens'), b = cat(d, 'clamp_tens'), c = cat(d, 'loop_clamp'), e = cat(d, 'sleeve_holder'), f = cat(d, 'band');
+  nodeSpec(sh, 230, 40, [
+    ['1', a.type || 'УН.П', 'Узел крепления натяжной', 1, a.mass || 3.7, 'шт.'],
+    ['2', '', 'Натяжной комплект ' + (b.type || 'НК-1'), 1, '—', 'к-т'],
+    ['3', c.type || 'ЗКШ-3-11/14-2', 'Зажим шлейфовый столбовой', 1, c.mass || 0.4, 'шт.'],
+    ['4', e.type || 'УПМК (эконом)', 'Устройство для подвеса муфты', 1, e.mass || 3.2, 'шт.'],
+    ['5', f.type || 'ТУ 3449-101-27560230-11', 'Хомут ленточный (лента 1,8 м × 1 + 1 замок)', 3, f.mass || 0.17, 'шт.']
+  ]);
+  sh.note('Спецификация приведена на один узел. Марки изделий — по спецификации проекта; при замене — равноценными с документами соответствия.');
+  sh.note('Запас кабеля укладывается кольцами на устройство для запаса; радиус изгиба — не менее 20 диаметров кабеля.');
+  fitSheet(sh);
+  return sh;
+}
+
+function tensionScheme(d) {
+  var sh = new Sheet({ kind: 'typical', title: 'Схема натяжного крепления ОК и обводки шлейфа на опорах ВЛ' });
+  stand(sh, 25, 10, 190, 6);
+  sh.line(22, 55, 0, 50, 'ВОЛС', 0.8); sh.line(28, 52, 55, 38, 'ВОЛС', 0.8);
+  sh.poly([[22, 55], [26, 62], [30, 56], [28, 52]], false, 'ВОЛС', 0.5);
+  leader(sh, 18, 55, 8, 70, '5'); leader(sh, 24, 58, 20, 75, '2'); leader(sh, 28, 58, 34, 72, '3'); leader(sh, 42, 45, 55, 58, '4');
+  sh.text(40, 62, 'ОК', FS.text);
+  /* разрез 1-1 */
+  var cx = 110; sh.text(cx - 8, 55, '1–1', FS.text, { b: true });
+  sh.line(cx, 58, cx, 170, 'РАЗМЕРЫ', 0.25, true);
+  sh.text(cx - 38, 76, 'ось трассы ВЛ', FS.small); sh.text(cx - 38, 158, 'ось трассы ВЛ', FS.small);
+  sh.poly([[cx - 10, 105], [cx + 10, 105], [cx + 8, 125], [cx - 8, 125]], true, 'ВЛ_ОПОРЫ', 0.5);
+  sh.poly([[cx, 82], [cx + 16, 100], [cx + 16, 130], [cx, 150]], false, 'ВОЛС', 0.6);
+  leader(sh, cx + 2, 88, cx - 30, 92, '1'); leader(sh, cx + 2, 142, cx - 30, 138, '1');
+  /* схема монтажа УН.П, узел 1 */
+  var mx = 170;
+  sh.text(mx + 20, 20, 'Схема монтажа ' + (cat(d, 'node_tens').type || 'УН.П') + ', узел 1', FS.head);
+  sh.rect(mx + 40, 36, 30, 34, 'ВЛ_ОПОРЫ', 0.5); sh.rect(mx + 50, 50, 10, 6, 'ВЛ_ОПОРЫ', 0.3);
+  sh.line(mx, 42, mx + 40, 42, 'ВОЛС', 0.8); sh.line(mx + 70, 42, mx + 110, 42, 'ВОЛС', 0.8);
+  sh.poly([[mx + 22, 42], [mx + 30, 56], [mx + 80, 56], [mx + 88, 42]], false, 'ВОЛС', 0.6);
+  sh.text(mx + 88, 64, 'ОКСН', FS.small);
+  leader(sh, mx + 8, 42, mx, 32, '5'); leader(sh, mx + 95, 42, mx + 100, 30, '1');
+  var a = cat(d, 'node_tens'), c = cat(d, 'loop_clamp'), f = cat(d, 'band'), b = cat(d, 'clamp_tens');
+  nodeSpec(sh, 170, 90, [
+    ['1', a.type || 'УН.П', 'Узел натяжной для стоек прямоугольного сечения', 1, a.mass || 3.5, 'шт.'],
+    ['2', c.type || 'ЗКШ-3-11/14-2', 'Зажим шлейфовый', 1, c.mass || 0.4, 'шт.'],
+    ['3', f.type || 'ТУ 3449-101-27560230-11', 'Хомут ленточный (лента 1,5 м × 1 + 1 замок)', 1, f.mass || 0.17, 'к-т'],
+    ['4', '', 'Натяжной комплект ' + (b.type || 'НК-1') + ' (комплект 1)', 1, '—', 'к-т'],
+    ['5', '', 'Натяжной комплект ' + (b.type || 'НК-1') + ' (комплект 2)', 1, '—', 'к-т']
+  ]);
+  sh.note('1. Натяжной комплект ' + (b.type || 'НК-1') + ' применять согласно монтажной ведомости.');
+  sh.note('2. Минимальный радиус изгиба волоконно-оптического кабеля (ВОК) — 20 диаметров кабеля.');
+  sh.note('3. Подвес ВОК осуществить на расстоянии не менее 1 м от фазных проводов.');
+  fitSheet(sh);
+  return sh;
+}
+
+function suspensionScheme(d) {
+  var sh = new Sheet({ kind: 'typical', title: 'Схема поддерживающего крепления ОК на опорах' });
+  stand(sh, 25, 10, 190, 6);
+  sh.rect(18, 60, 14, 3, 'ВЛ_ОПОРЫ', 0.4);
+  sh.line(5, 66, 50, 60, 'ВОЛС', 0.8);
+  leader(sh, 30, 60, 42, 52, '1'); leader(sh, 36, 64, 52, 66, '2'); sh.text(20, 76, 'ОК', FS.text);
+  var cx = 110;
+  sh.line(cx, 40, cx, 110, 'РАЗМЕРЫ', 0.25, true);
+  sh.text(cx - 38, 44, 'ось трассы ВЛ', FS.small); sh.text(cx - 38, 104, 'ось трассы ВЛ', FS.small);
+  sh.poly([[cx - 22, 62], [cx - 2, 62], [cx - 2, 82], [cx - 22, 82]], true, 'ВЛ_ОПОРЫ', 0.5);
+  sh.line(cx - 1, 62, cx + 2, 82, 'ВЛ_ОПОРЫ', 0.5); sh.circle(cx + 3, 84, 1.2, 'ВОЛС', true);
+  leader(sh, cx - 12, 62, cx - 6, 54, '2'); leader(sh, cx + 1, 70, cx + 12, 64, '3'); leader(sh, cx + 2, 78, cx + 12, 76, '1');
+  sh.text(cx + 8, 90, 'ОК', FS.text);
+  var mx = 170;
+  sh.text(mx + 10, 20, 'Схема монтажа ' + (cat(d, 'node_susp').type || 'УК-П-К'), FS.head);
+  sh.rect(mx + 40, 30, 26, 60, 'ВЛ_ОПОРЫ', 0.5);
+  sh.line(mx + 20, 48, mx + 90, 44, 'ВЛ_ОПОРЫ', 0.8);
+  sh.circle(mx + 53, 66, 4, 'ВОЛС', false); sh.line(mx + 10, 72, mx + 100, 60, 'ВОЛС', 0.8);
+  leader(sh, mx + 88, 44, mx + 100, 36, '1'); leader(sh, mx + 80, 63, mx + 100, 70, '2');
+  var a = cat(d, 'node_susp'), b = cat(d, 'clamp_susp');
+  nodeSpec(sh, 170, 100, [
+    ['1', a.type || 'УК-П-К', 'Узел крепления поддерживающий', 1, a.mass || 0.97, 'шт.'],
+    ['2', '', 'Поддерживающий комплект ' + (b.type || 'ПК-1'), 1, '—', 'к-т']
+  ]);
+  sh.note('1. Подвес ВОК осуществить на расстоянии не менее 0,6 м от фазных проводов.');
+  fitSheet(sh);
+  return sh;
+}
+
+function typicalSheets(d) {
+  var X = global.PDRD_DECIDE, out = [];
+  if (!d.poles.some(onRoute)) return out;
+  var kvs = {}; d.lines.forEach(function (l) { if (l.cable !== false && l.kv !== null) kvs[+l.kv <= 1 ? 'lv' : 'hv'] = 1; });
+  if (kvs.lv) out.push(crossProfile(d, '0,4'));
+  if (kvs.lv && kvs.hv) out.push(crossProfile(d, '0,4-10'));
+  var tt = X ? X.totals(d) : { nodes: {}, sleeves: 0 };
+  if (tt.sleeves) out.push(sleeveSheet(d));
+  if (tt.nodes['А1'] || tt.nodes['А2'] || tt.nodes['АО'] || tt.nodes['С']) out.push(tensionScheme(d));
+  if (tt.nodes['П'] || tt.nodes['ПУ']) out.push(suspensionScheme(d));
+  return out;
+}
+
 /* ---------------------------------------------------------------- комплект */
-var KINDS = [planSheets, skeletonSheets, routeSheets, layoutSheets, nodeSheets, montageSheets, crossingSheets, damperSheets, gponSheets, posSheets];
+var KINDS = [planSheets, skeletonSheets, routeSheets, layoutSheets, nodeSheets, montageSheets, crossingSheets, damperSheets, gponSheets, posSheets, typicalSheets];
 var _cache = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
 function sheets(d) {
   if (_cache && _cache.has(d)) return _cache.get(d);
