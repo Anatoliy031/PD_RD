@@ -219,10 +219,11 @@ function dataUrlToBytes(url) {
   return a;
 }
 function imageOf(sheet) { return (sheet.p || []).filter(function (e) { return e.t === 'image' && e.href && !e.remote; })[0] || null; }
+function imagesOf(sheet) { return (sheet.p || []).filter(function (e) { return e.t === 'image' && e.href && !e.remote; }); }
 function hasRemote(sheet) { return (sheet.p || []).some(function (e) { return e.t === 'image' && e.remote; }); }
 
 global.PDRD_MAP = { SOURCES: SOURCES, byId: byId, plan: plan, tiles: tiles, routeBbox: routeBbox,
   rotateDataUrl: rotateDataUrl, cropToClip: cropToClip, bake: bake, worldFile: worldFile,
-  dataUrlToBytes: dataUrlToBytes, imageOf: imageOf, hasRemote: hasRemote,
+  dataUrlToBytes: dataUrlToBytes, imageOf: imageOf, imagesOf: imagesOf, hasRemote: hasRemote,
   lon2x: lon2x, lat2y: lat2y, x2lon: x2lon, y2lat: y2lat };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1335,18 +1335,52 @@ function suspensionScheme(d) {
   return sh;
 }
 
+/* Лист из изображения-образца заказчика (без перерисовки): изображение вписывается
+   в рабочее поле с сохранением пропорций */
+function imageSheet(title, parts, notes) {
+  var IMG = global.PDRD_TYPICAL_IMG || {};
+  var sh = new Sheet({ kind: 'typical', title: title, source: 'image' });
+  (notes || []).forEach(function (n) { sh.note(n); });
+  var z = zone(sh), W0 = z.x1 - z.x0, H0 = z.y1 - z.y0;
+  var ok = parts.every(function (p) { return IMG[p.key]; });
+  if (!ok) return null;
+  if (parts.length === 1) {
+    var im = IMG[parts[0].key], k = Math.min(W0 / im.w, H0 / im.h);
+    var w = im.w * k, h = im.h * k;
+    sh.image(z.x0 + (W0 - w) / 2, z.y0 + (H0 - h) / 2, w, h, im.src, 0, null, false);
+    sh.meta.fill = Math.round(Math.max(w / W0, h / H0) * 100);
+  } else {
+    /* основной рисунок сверху, таблица спецификации — под ним справа */
+    var a = IMG[parts[0].key], b = IMG[parts[1].key];
+    var hb = Math.min(H0 * 0.28, W0 * 0.55 * b.h / b.w), wb = hb * b.w / b.h;
+    var ha = H0 - hb - 4, ka = Math.min(W0 / a.w, ha / a.h), wa = a.w * ka;
+    ha = a.h * ka;
+    sh.image(z.x0 + (W0 - wa) / 2, z.y0, wa, ha, a.src, 0, null, false);
+    sh.image(z.x1 - wb, z.y0 + ha + 4, wb, hb, b.src, 0, null, false);
+    sh.meta.fill = Math.round(Math.max(wa / W0, (ha + hb + 4) / H0) * 100);
+  }
+  return sh;
+}
+
 function typicalSheets(d) {
   var X = global.PDRD_DECIDE, out = [];
   if (!d.poles.some(onRoute)) return out;
   var kvs = {};
   d.lines.forEach(function (l) { var k = num(l.kv); if (l.cable !== false && k !== null) kvs[k <= 1 ? 'lv' : 'hv'] = 1; });
   d.poles.forEach(function (p) { if (!onRoute(p)) return; (p.fromReport || []).forEach(function (r) { var k = num(r.kv); if (k !== null) kvs[k <= 1 ? 'lv' : 'hv'] = 1; }); });
-  if (kvs.lv) out.push(crossProfile(d, '0,4'));
-  if (kvs.lv && kvs.hv) out.push(crossProfile(d, '0,4-10'));
+  var NOTE_PROF = 'Стрела провеса проектируемого кабеля указана при нормальных условиях. Согласно ПУЭ (7 издание), пункт 2.5.197, расстояние от фазных проводов до волоконно-оптического кабеля на опорах ВЛ до 35 кВ должно быть не менее 0,6 м.';
+  function pick(img, fallback) { return img || fallback(); }
+  if (kvs.lv) out.push(pick(imageSheet('Профиль пересечения с автодорогой в пролёте опор ВЛ 0,4 кВ ПАО «Россети Юг» — «Кубаньэнерго»', [{ key: 'profil_04' }], [NOTE_PROF]),
+    function () { return crossProfile(d, '0,4'); }));
+  if (kvs.lv && kvs.hv) out.push(pick(imageSheet('Профиль пересечения с автодорогой в пролёте опор ВЛ 0,4–10 кВ ПАО «Россети Юг» — «Кубаньэнерго»', [{ key: 'profil_04_10' }], [NOTE_PROF]),
+    function () { return crossProfile(d, '0,4-10'); }));
   var tt = X ? X.totals(d) : { nodes: {}, sleeves: 0 };
-  if (tt.sleeves) out.push(sleeveSheet(d));
-  if (tt.nodes['А1'] || tt.nodes['А2'] || tt.nodes['АО'] || tt.nodes['С']) out.push(tensionScheme(d));
-  if (tt.nodes['П'] || tt.nodes['ПУ']) out.push(suspensionScheme(d));
+  if (tt.sleeves) out.push(pick(imageSheet('Натяжное крепление ОК с размещением муфты и запаса кабеля на стойке типа СВ', [{ key: 'mufta_sv' }, { key: 'mufta_sv_spec' }], []),
+    function () { return sleeveSheet(d); }));
+  if (tt.nodes['А1'] || tt.nodes['А2'] || tt.nodes['АО'] || tt.nodes['С']) out.push(pick(imageSheet('Схема натяжного крепления ОК и обводки шлейфа на опорах ВЛ', [{ key: 'natyazhnoe' }], []),
+    function () { return tensionScheme(d); }));
+  if (tt.nodes['П'] || tt.nodes['ПУ']) out.push(pick(imageSheet('Схема поддерживающего крепления ОК на опорах', [{ key: 'podderzh' }], []),
+    function () { return suspensionScheme(d); }));
   return out;
 }
 

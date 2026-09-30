@@ -741,8 +741,14 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     var prof = sh.filter(function(s){ return /Профиль пересечения/.test(s.meta.title); })[0];
     eq(prof.notes.some(function(n){ return /2\.5\.197/.test(n) && /0,6 м/.test(n); }), true, 'примечание ПУЭ 2.5.197');
     var ten = sh.filter(function(s){ return /Схема натяжного крепления/.test(s.meta.title); })[0];
-    eq(ten.notes.length >= 3, true, 'три примечания');
-    eq(ten.p.some(function(e){ return e.t === 'text' && /Зажим шлейфовый/.test(e.s); }), true, 'спецификация на листе');
+    eq(ten.p.filter(function(e){ return e.t === 'image'; }).length, 1, 'образец заказчика на листе');
+    var muf = sh.filter(function(s){ return /Натяжное крепление ОК с размещением муфты/.test(s.meta.title); })[0];
+    eq(muf.p.filter(function(e){ return e.t === 'image'; }).length, 2, 'рисунок и спецификация');
+    sh.filter(function(s){ return s.meta.kind === 'typical'; }).forEach(function(s){
+      s.p.filter(function(e){ return e.t === 'image'; }).forEach(function(e){
+        if (e.x < 24 || e.y < 9 || e.x + e.w > 416 || e.y + e.h > 297 - 60) throw new Error(s.meta.title + ': рисунок за рабочим полем');
+      });
+    });
     eq(sh.slice(-5).every(function(s){ return s.meta.kind === 'typical'; }), true, 'листы в конце комплекта');
     return '5 листов';
   });

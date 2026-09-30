@@ -50,12 +50,12 @@ function build(d, opt) {
     sheets.forEach(function (sh) {
       var name = global.PDRD_DXF.fileName(d, sh).replace('.dxf', sfx + '.dxf');
       put('3_Chertezhi_DXF/' + name, global.PDRD_DXF.cp1251(global.PDRD_DXF.toDxf(sh)));
-      var im = global.PDRD_MAP ? global.PDRD_MAP.imageOf(sh) : null;
-      if (im && im.href) {
-        var base = '3_Chertezhi_DXF/' + name.replace(/\.dxf$/, '');
+      var ims = global.PDRD_MAP ? global.PDRD_MAP.imagesOf(sh) : [];
+      ims.forEach(function (im, k) {
+        var base = '3_Chertezhi_DXF/' + name.replace(/\.dxf$/, '') + (ims.length > 1 ? '_' + (k + 1) : '');
         put(base + '.jpg', global.PDRD_MAP.dataUrlToBytes(im.href));
         put(base + '.jgw', global.PDRD_MAP.worldFile(im, global.PDRD_SVG.H, im.pxW || 2048, im.pxH || 2048));
-      }
+      });
     });
     if (sheets.some(function (sh) { return global.PDRD_MAP && global.PDRD_MAP.imageOf(sh); }))
       z.file('3_Chertezhi_DXF/Podlozhka_README.txt', '\ufeffРастровая подложка подключается в САПР как внешняя ссылка (команда IMAGEATTACH): файл <имя листа>.jpg рядом с DXF, файл привязки <имя листа>.jgw задаёт положение и масштаб в координатах листа (мм). Источник карты указан в примечаниях листа.\r\n');
