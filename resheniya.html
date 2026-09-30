@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Решения по опорам — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.7.2">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.8.0">
 <style>
 .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px}
 .frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
@@ -97,6 +97,7 @@ small.r{display:block;color:var(--muted);font-size:12px}
     <div class="btns">
       <button class="btn primary" id="bProp" type="button">Предложить решения</button>
       <button class="btn" id="bSave" type="button">Сохранить</button>
+      <button class="btn" id="bRecalc" type="button">Пересчитать с принятыми решениями</button>
     </div>
     <div id="msg"></div>
     <div class="stats" id="stats"></div>
@@ -106,14 +107,14 @@ small.r{display:block;color:var(--muted);font-size:12px}
   </section>
   </div>
 </main>
-<script src="pdrd-core.js?v=1.7.2"></script>
-<script src="pdrd-norms.js?v=1.7.2"></script>
-<script src="pdrd-profiles.js?v=1.7.2"></script>
-<script src="pdrd-refs-v25.js?v=1.7.2"></script>
-<script src="pdrd-refs.js?v=1.7.2"></script>
-<script src="pdrd-calc.js?v=1.7.2"></script>
-<script src="pdrd-design.js?v=1.7.2"></script>
-<script src="pdrd-decide.js?v=1.7.2"></script>
+<script src="pdrd-core.js?v=1.8.0"></script>
+<script src="pdrd-norms.js?v=1.8.0"></script>
+<script src="pdrd-profiles.js?v=1.8.0"></script>
+<script src="pdrd-refs-v25.js?v=1.8.0"></script>
+<script src="pdrd-refs.js?v=1.8.0"></script>
+<script src="pdrd-calc.js?v=1.8.0"></script>
+<script src="pdrd-design.js?v=1.8.0"></script>
+<script src="pdrd-decide.js?v=1.8.0"></script>
 <script>
 (function(){
   var P = PDRD, X = PDRD_DECIDE, C = PDRD_CALC, $ = function(id){ return document.getElementById(id); };
@@ -275,7 +276,7 @@ small.r{display:block;color:var(--muted);font-size:12px}
       var c3 = el('td'), s = el('select'); s.setAttribute('aria-label','Решение');
       s.appendChild(el('option','','—'));
       X.DECISIONS.forEach(function(o){ var op = el('option','',o.title); op.value = o.id; if (x.decision === o.id) op.selected = true; s.appendChild(op); });
-      s.onchange = function(){ x.decision = s.value; manual(); }; c3.appendChild(s); tr.appendChild(c3);
+      s.onchange = function(){ x.decision = s.value; manual(); X.reinforceSleevePoles(d, X.poleInfo(d)); }; c3.appendChild(s); tr.appendChild(c3);
       var c4 = el('td'), h = el('input','h'); h.type = 'text'; h.inputMode = 'decimal'; h.value = x.h_m === null || x.h_m === undefined ? '' : String(x.h_m).replace('.', ',');
       h.setAttribute('aria-label','Высота подвеса'); h.onchange = function(){ x.h_m = numIn(h.value); manual(); }; c4.appendChild(h);
       if (x.hWindow && x.hWindow.length) c4.appendChild(el('small','r', x.hWindow.map(function(iv){ return C.fmt(iv[0],2) + '…' + C.fmt(iv[1],2); }).join('; ')));
@@ -325,11 +326,18 @@ small.r{display:block;color:var(--muted);font-size:12px}
     if (d.calcResult) msg('ok','Решения предложены и расчёт уточнён с принятыми высотами подвеса. Автоматических решений: ' + r.changed + '; ручных сохранено: ' + r.kept + '.');
     refresh();
   };
+  $('bRecalc').onclick = function(){
+    X.reinforceSleevePoles(d, X.poleInfo(d));
+    PDRD_DESIGN.store(d);
+    P.replaceAll(d); d = P.load();
+    msg('ok','Расчёт выполнен с принятыми решениями (в том числе с подпорами). Проверьте столбец «Расчёт».');
+    refresh();
+  };
   $('bSave').onclick = function(){ P.replaceAll(d); d = P.load(); msg('ok','Решения сохранены.'); refresh(); };
 
   params(); sleeveUi(); lines(); sleevePanel(); refresh();
 })();
 </script>
-<script src="pdrd-nav.js?v=1.7.2"></script>
+<script src="pdrd-nav.js?v=1.8.0"></script>
 </body>
 </html>

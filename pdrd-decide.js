@@ -12,6 +12,7 @@ var DECISIONS = [
   { id: 'after',     title: 'Размещать после замены (восстановления) опоры владельцем', short: 'после замены' },
   { id: 'extra',     title: 'Установить промежуточную опору (Е.1, по согласованию с владельцем)', short: 'доп. опора (Е.1)' },
   { id: 'recheck',   title: 'Размещать после поверочного расчёта по типовому проекту', short: 'после поверочного расчёта' },
+  { id: 'strut',     title: 'Размещать с установкой дополнительного подпора (Е.1)', short: 'с подпором' },
   { id: 'bypass',    title: 'Обход участка (кабель по опоре не проходит)', short: 'обход' },
   { id: 'exclude',   title: 'Не размещать', short: 'не размещать' }
 ];
@@ -134,7 +135,19 @@ function propose(d, opt) {
     else if (inf.excluded) { des.decision = 'after'; des.why.push('нет технологической возможности по отчёту (' + (p.state || '') + '); размещение — после восстановления владельцем, сроки не возлагаются на пользователя'); }
     else {
       var cr = inf.calc;
-      if (cr && cr.status === 'exceed') {
+      var RFc = global.PDRD_REFS ? global.PDRD_REFS.capacityOf(p.mark) : null;
+      var pcc = (d.poleCapacity || {})[p.mark] || {};
+      var strutCap = pcc.T_top_strut_kn != null && pcc.T_top_strut_kn !== '' ? +pcc.T_top_strut_kn : (RFc && RFc.T_top_strut_kn ? +RFc.T_top_strut_kn : null);
+      if (cr && cr.strutUsed && cr.strutFor === 'load' && cr.status !== 'exceed') {
+        des.decision = 'strut';
+        des.why.push('с дополнительным подпором опора проходит по допустимой нагрузке (допустимое тяжение на вершине ' + strutCap + ' кН)');
+      } else if (cr && cr.status === 'exceed' && strutCap && !cr.strutUsed) {
+        des.decision = 'strut';
+        des.why.push('опора не проходит по допустимой нагрузке (' + (cr.reasons || []).join('; ') + '); предусмотрен дополнительный подпор — допустимое тяжение на вершине с подпором ' + strutCap + ' кН, расчёт повторён');
+      } else if (cr && cr.status === 'exceed' && cr.strutUsed && cr.strutFor === 'load') {
+        des.decision = inf.anchor ? 'recheck' : 'extra';
+        des.why.push('опора не проходит по допустимой нагрузке и с дополнительным подпором (' + (cr.reasons || []).join('; ') + ')');
+      } else if (cr && cr.status === 'exceed') {
         if (inf.anchor) { des.decision = 'recheck'; des.why.push('расчёт не выполнен для конструкции с подкосом'); }
         else { des.decision = 'extra'; des.why.push('несущая способность не обеспечена: ' + (cr.reasons || []).join('; ')); }
       } else if (inf.overGab && !(cr && cr.status === 'ok')) {
@@ -192,7 +205,7 @@ function fixSpans(d, info, opt) {
     if (ends.some(function (p) { return p.design && p.design.decision === 'extra'; })) return;
     var pick = ends.filter(function (p) { return !info[p.id].anchor; })[0] || ends[0];
     if (!pick || !pick.design || (pick.design.by === 'проектировщик' && !(opt && opt.overwrite))) return;
-    if (['place', 'recheck'].indexOf(pick.design.decision) < 0) return;
+    if (['place', 'recheck', 'strut'].indexOf(pick.design.decision) < 0) return;
     pick.design.decision = 'extra';
     pick.design.why.push('пролёт ' + s.from + ' — ' + s.to + ': ' + (s.reasons || []).join('; ') + ' — дополнительная опора в пролёте');
   });
@@ -203,7 +216,7 @@ function fixSpans(d, info, opt) {
 function keepSleeves(d, prm) {
   d.poles.forEach(function (p) {
     var x = p.design; if (!x || !x.sleeve) return;
-    if (['place', 'recheck', 'extra', 'after'].indexOf(x.decision) < 0) return;
+    if (['place', 'recheck', 'extra', 'after', 'strut'].indexOf(x.decision) < 0) return;
     x.node = 'С';
     if (num(x.reserve_m) === null) x.reserve_m = prm.reserveT_m;
     if (!x.sleeveType) x.sleeveType = 'прямая';
@@ -217,7 +230,7 @@ function placeSleeves(d, info, prm) {
   var placed = {};
   function put(p, type, why) {
     if (!p || placed[p.id] || (p.design || {}).by === 'проектировщик') return;
-    if (['place', 'recheck'].indexOf((p.design || {}).decision) < 0) return;
+    if (['place', 'recheck', 'strut'].indexOf((p.design || {}).decision) < 0) return;
     placed[p.id] = 1;
     p.design.sleeve = true; p.design.sleeveType = type; p.design.reserve_m = prm.reserveT_m;
     p.design.node = 'С'; p.design.why.push(why);
@@ -248,7 +261,7 @@ function reinforceSleevePoles(d, info) {
     var x = p.design; if (!x) return;
     var inf = info[p.id];
     var single = inf && !inf.anchor;            /* анкерные и ответвительные уже с подкосами */
-    x.reinforce = !!(x.sleeve && single && ['place', 'recheck', 'extra', 'after'].indexOf(x.decision) >= 0);
+    x.reinforce = x.decision === 'strut' || !!(x.sleeve && single && ['place', 'recheck', 'extra', 'after', 'strut'].indexOf(x.decision) >= 0);
     if (x.reinforce && !(x.why || []).some(function (w) { return /подпор/.test(w); }))
       (x.why = x.why || []).push('одностоечная опора с муфтой и запасом кабеля — устанавливается дополнительный подпор для повышения допустимого горизонтального тяжения (мероприятие Е.1)');
   });
@@ -259,7 +272,7 @@ function placeDampers(d, info, prm) {
   if (!prm.dampersFromSpan_m) return;
   d.poles.forEach(function (p) {
     var inf = info[p.id];
-    if (!p.design || (p.design.by === 'проектировщик') || ['place', 'recheck'].indexOf(p.design.decision) < 0) return;
+    if (!p.design || (p.design.by === 'проектировщик') || ['place', 'recheck', 'strut'].indexOf(p.design.decision) < 0) return;
     if (inf.spanMax >= prm.dampersFromSpan_m) {
       p.design.dampers = true;
       p.design.why.push('пролёт ' + inf.spanMax + ' м ≥ ' + prm.dampersFromSpan_m + ' м — гасители вибрации' + (prm.dampersOwnProtector ? ' на отдельных протекторах' : ''));
@@ -284,13 +297,13 @@ function check(d) {
   d.poles.forEach(function (p) {
     var des = p.design || {}, inf = info[p.id];
     if (!des.decision) return;
-    if (inf.excluded && ['place', 'recheck', 'extra'].indexOf(des.decision) >= 0)
+    if (inf.excluded && ['place', 'recheck', 'extra', 'strut'].indexOf(des.decision) >= 0)
       add('stop', p, 'Решение «' + title(des.decision) + '» на опоре без технологической возможности (' + (p.state || '') + ')', 'отчёт п. 13; ч. 1 ст. 10 135-ФЗ');
     if (des.decision === 'place' && inf.calc && inf.calc.status === 'exceed')
       add('stop', p, 'Размещение при невыполненной проверке несущей способности', 'ТТ № 282р, п. 6');
     if (des.decision === 'place' && inf.calc && inf.calc.status === 'blocked')
       add('warn', p, 'Расчёт не завершён — нет исходных данных', 'ТТ № 282р, п. 6');
-    if (['place', 'recheck'].indexOf(des.decision) >= 0) {
+    if (['place', 'recheck', 'strut'].indexOf(des.decision) >= 0) {
       var h = num(des.h_m);
       if (h === null) add('stop', p, 'Высота подвеса не определена');
       else if (des.hWindow && des.hWindow.length && !des.hWindow.some(function (iv) { return h >= iv[0] - 1e-9 && h <= iv[1] + 1e-9; }))
@@ -311,11 +324,11 @@ function title(id, short) { var x = DECISIONS.filter(function (z) { return z.id 
 
 /* Сводные количества для спецификации */
 function totals(d) {
-  var t = { place: 0, after: 0, extra: 0, recheck: 0, bypass: 0, exclude: 0, sleeves: 0, reserves_m: 0, dampers: 0, reinforce: 0, nodes: {} };
+  var t = { place: 0, after: 0, extra: 0, recheck: 0, strut: 0, bypass: 0, exclude: 0, sleeves: 0, reserves_m: 0, dampers: 0, reinforce: 0, nodes: {} };
   d.poles.forEach(function (p) {
     var x = p.design || {};
     if (x.decision) t[x.decision] = (t[x.decision] || 0) + 1;
-    if (['place', 'recheck'].indexOf(x.decision) >= 0) {
+    if (['place', 'recheck', 'strut'].indexOf(x.decision) >= 0) {
       t.nodes[x.node] = (t.nodes[x.node] || 0) + 1;
       if (x.sleeve) { t.sleeves++; t.reserves_m += num(x.reserve_m) || 0; }
       if (x.dampers) t.dampers++;

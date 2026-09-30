@@ -14,7 +14,7 @@ function kml(d) {
   });
   o.push('<Style id="vols"><LineStyle><color>ffa8580a</color><width>4</width></LineStyle></Style>');
   o.push('<Style id="vl"><LineStyle><color>ff9a9a9a</color><width>1.5</width></LineStyle></Style>');
-  var segs = S.segments(d), on = function (p) { return ['place', 'recheck', 'extra', 'after'].indexOf((p.design || {}).decision) >= 0; };
+  var segs = S.segments(d), on = function (p) { return ['place', 'recheck', 'extra', 'after', 'strut'].indexOf((p.design || {}).decision) >= 0; };
   var lineOff = {}; d.lines.forEach(function (l) { if (l.cable === false) lineOff[l.id] = 1; });
   ['vols', 'vl'].forEach(function (kind) {
     o.push('<Folder><name>' + (kind === 'vols' ? 'Трасса ВОЛС' : 'ВЛ без кабеля') + '</name>');

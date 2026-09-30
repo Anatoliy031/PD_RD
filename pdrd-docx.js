@@ -364,7 +364,7 @@ function dataFromProject(d, tpl) {
       }) };
     tables['ОПОРЫ_СВОДКА'] = (function () {
       var by = {};
-      d.poles.forEach(function (p) { var k = p.mark || '—'; by[k] = by[k] || { n: 0, place: 0 }; by[k].n++; if (p.design && ['place', 'recheck'].indexOf(p.design.decision) >= 0) by[k].place++; });
+      d.poles.forEach(function (p) { var k = p.mark || '—'; by[k] = by[k] || { n: 0, place: 0 }; by[k].n++; if (p.design && ['place', 'recheck', 'strut'].indexOf(p.design.decision) >= 0) by[k].place++; });
       var RF = global.PDRD_REFS_V25;
       return { caption: 'Таблица — Опоры воздушных линий', cols: [{ t: 'Марка', w: 25 }, { t: 'Назначение', w: 50 }, { t: 'Стойка / типовой проект', w: 55 }, { t: 'Всего', w: 20 }, { t: 'С размещением кабеля', w: 25 }],
         rows: Object.keys(by).sort().map(function (k) { var ref = RF ? RF.poleByMark(k) : null; return [k, ref ? ref.type : '—', ref ? ref.proj_full : '—', String(by[k].n), String(by[k].place)]; }) };
@@ -383,7 +383,9 @@ function dataFromProject(d, tpl) {
       var nums = (p.lines || []).map(function (l) { return l.num; }).join(' / ') + ' (' + p.mark + ')';
       if (p.design.decision === 'extra') e1.push([nums, 'Установка дополнительной промежуточной опоры (по согласованию с владельцем инфраструктуры)', (p.design.why || []).join('; '), 'пользователь инфраструктуры']);
       if (p.design.decision === 'recheck') e1.push([nums, 'Поверочный расчёт несущей способности по типовому проекту', (p.design.why || []).join('; '), 'пользователь инфраструктуры']);
-      if (p.design.reinforce) e1.push([nums, 'Установка дополнительного подпора к одностоечной опоре в месте установки муфты и запаса кабеля', 'повышение допустимого горизонтального тяжения опоры с муфтой', 'пользователь инфраструктуры']);
+      if (p.design.reinforce) e1.push([nums, 'Установка дополнительного подпора к опоре',
+        p.design.decision === 'strut' ? 'опора не проходит по допустимой нагрузке без подпора; с подпором — проходит (расчёт PD_RD)' : 'муфта и запас кабеля на одностоечной опоре — повышение допустимого горизонтального тяжения',
+        'пользователь инфраструктуры']);
       if (p.design.decision === 'after') e1.push([nums, 'Размещение после замены опоры; расчёт выполнен для новой опоры той же марки', (p.state || 'состояние по отчёту п. 13'), 'замена опоры — владелец инфраструктуры; размещение — пользователь']);
     });
     tables['Е1'] = { caption: 'Таблица — Мероприятия, обусловленные размещением (Е.1)',

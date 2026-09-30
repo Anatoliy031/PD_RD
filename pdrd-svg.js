@@ -205,7 +205,7 @@ function segments(d) {
   });
   return out;
 }
-function onRoute(p) { return ['place', 'recheck', 'extra', 'after'].indexOf((p.design || {}).decision) >= 0; }
+function onRoute(p) { return ['place', 'recheck', 'extra', 'after', 'strut'].indexOf((p.design || {}).decision) >= 0; }
 function poleNums(p) { return (p.lines || []).map(function (l) { return l.num; }).join('/'); }
 
 /* Условное обозначение опоры: промежуточная — стойка; анкерная, угловая
@@ -642,7 +642,7 @@ function routeSheets(d) {
         if (des.reinforce) anyStrut = true;
         sh.text(x, base + 5, it.r.num, FS.text, { a: 'middle', max: step - 1, l: des.reinforce ? 'МУФТЫ' : 'ТЕКСТ' });
         sh.text(x, base + 9.5, it.r.mark || '—', FS.small, { a: 'middle', max: step - 1 });
-        var code = { place: des.node || '', recheck: (des.node || '') + '*', extra: 'Е1', after: 'В', bypass: '—', exclude: '×' }[des.decision] || '?';
+        var code = { place: des.node || '', recheck: (des.node || '') + '*', strut: des.node || '', extra: 'Е1', after: 'В', bypass: '—', exclude: '×' }[des.decision] || '?';
         sh.text(x, base + 14, code, FS.text, { a: 'middle', l: des.decision === 'place' ? 'ТЕКСТ' : 'МУФТЫ' });
         if (des.h_m) sh.text(x, base + 18.5, fm(des.h_m, 2), FS.small, { a: 'middle', l: 'РАЗМЕРЫ' });
         if (des.sleeve) sh.poly([[x, y + 2], [x - 2.2, y + 6], [x + 2.2, y + 6]], true, 'МУФТЫ', 0.5);
@@ -656,7 +656,7 @@ function routeSheets(d) {
     sh.note('Под опорой указаны: номер опоры, марка опоры, узел крепления кабеля и высота подвеса кабеля, м. Над линией — длина пролёта, м.');
     sh.note('Узлы крепления: П — поддерживающий; ПУ — поддерживающий угловой; А1 — анкерный односторонний; А2 — анкерный двусторонний; АО — анкерный с ответвлением; С — узел спуска (муфта, запас).');
     sh.note('Решения: * — размещение после поверочного расчёта по типовому проекту; Е1 — установка дополнительной опоры (мероприятие Е.1); В — размещение после замены опоры владельцем; ▲ — муфта и запас кабеля.');
-    if (anyStrut) sh.note('Красным выделены одностоечные опоры с муфтой, к которым устанавливается дополнительный подпор (мероприятие Е.1, позиция спецификации «Подпор»).');
+    if (anyStrut) sh.note('Красным выделены опоры, к которым устанавливается дополнительный подпор: не проходящие по допустимой нагрузке и одностоечные с муфтой (мероприятие Е.1, позиция спецификации «Подпор»).');
     fitSheet(sh);
     out.push(sh);
   }

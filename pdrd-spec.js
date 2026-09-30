@@ -5,7 +5,7 @@
    наименования с отметкой «по каталогу». */
 (function (global) {
 'use strict';
-var INCL = ['place', 'recheck', 'extra', 'after'];
+var INCL = ['place', 'recheck', 'extra', 'after', 'strut'];
 function num(v) { var n = typeof v === 'number' ? v : parseFloat(String(v === undefined || v === null ? '' : v).replace(',', '.')); return isFinite(n) ? n : null; }
 
 /* Состав узлов крепления. Ключи позиций используются в каталоге проекта
@@ -26,7 +26,7 @@ var ITEMS = {
   protector:      { name: 'Протектор спиральный под гаситель вибрации', unit: 'шт.' },
   tag:            { name: 'Бирка маркировочная кабельная', unit: 'шт.' },
   sign:           { name: 'Знак постоянный на опоре', unit: 'шт.' },
-  strut:          { name: 'Подпор (дополнительная стойка с креплением) для одностоечной опоры', unit: 'компл.' },
+  strut:          { name: 'Подпор (дополнительная стойка с креплением) к опоре ВЛ', unit: 'компл.' },
   pole_extra:     { name: 'Опора промежуточная (мероприятие Е.1)', unit: 'шт.' }
 };
 /* Состав узла: [ключ позиции, количество]; лента и скрепы считаются по числу кронштейнов */
@@ -151,7 +151,7 @@ function build(d) {
   add('tag', nodesAll, { note: 'у каждого места крепления, не далее 0,10 м (ТТ № 282р, п. 3.1)' });
   if (sp.signs) add('sign', d.poles.filter(function (p) { return (p.design || {}).sleeve; }).length, { note: 'у муфт, на высоте 2,5 ± 0,5 м (требование ТЗ)' });
   var reinforced = d.poles.filter(function (p) { return (p.design || {}).reinforce && INCL.indexOf((p.design || {}).decision) >= 0; }).length;
-  add('strut', reinforced, { note: 'одностоечные опоры с муфтой и запасом кабеля; марка — по типовому проекту ВЛ, согласование с владельцем' });
+  add('strut', reinforced, { note: 'опоры с муфтой на одной стойке и опоры, не проходящие по допустимой нагрузке; марка — по типовому проекту ВЛ, согласование с владельцем' });
   add('pole_extra', t.extra, { note: 'марка — по типовому проекту ВЛ, согласование с владельцем' });
   return { items: items, lengths: L, totals: t, brackets: brackets, reinforced: reinforced,
            needType: items.filter(function (x) { return x.needType; }).length };
@@ -168,7 +168,7 @@ function bor(d, spec) {
   if (sp.fibers) add('Сварка оптических волокон', 'сварка', L.sleeves * sp.fibers, sp.fibers + ' ОВ в каждой муфте');
   add('Установка гасителей вибрации', 'шт.', t.dampers * 2);
   add('Установка маркировочных бирок', 'шт.', nodesAll);
-  add('Установка дополнительного подпора к одностоечной опоре', 'шт.', spec.reinforced || 0, 'опоры с муфтой и запасом кабеля');
+  add('Установка дополнительного подпора к опоре', 'шт.', spec.reinforced || 0, 'по ведомости опор (решение «с подпором» и муфты на одной стойке)');
   add('Установка промежуточных опор (Е.1)', 'шт.', t.extra, 'по согласованию с владельцем инфраструктуры');
   add('Измерения затухания рефлектометром на ЭКУ (две длины волны, два направления)', 'ЭКУ', L.eku);
   add('Измерение габаритов и расстояний после монтажа', 'пролёт', L.spans.length);

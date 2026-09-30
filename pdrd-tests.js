@@ -674,7 +674,7 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     var sp = PDRD_SPEC.build(demo), by = {};
     sp.items.forEach(function(x){ by[x.key] = x; });
     var t2 = PDRD_DECIDE.totals(demo);
-    eq(by.node_susp.qty, t2.nodes['П'] || 0, 'узлы поддерживающие = зажимы поддерживающие');
+    eq(by.node_susp.qty, (t2.nodes['П'] || 0) + (t2.nodes['ПУ'] || 0), 'узлы поддерживающие по числу узлов П и ПУ');
     eq(by.clamp_susp.qty, by.node_susp.qty, 'зажим и узел работают в паре');
     eq(!!by.turnbuckle && by.turnbuckle.qty > 0, true, 'талрепы');
     eq(!!by.link && by.link.qty === by.turnbuckle.qty, true, 'промежуточные звенья');
@@ -712,6 +712,25 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     var plan = sh.filter(function(s){ return s.meta.kind === 'plan'; })[0];
     eq(plan.p.filter(function(e){ return e.t === 'circle' && e.l === 'МУФТЫ' && e.r >= 3; }).length >= 2, true, 'кольцо на плане');
     return 'выделено';
+  });
+  t('Опора не проходит по нагрузке → решение «с подпором», пересчёт, чертёж и спецификация', function(){
+    var d0 = window.PDRD_DEMO.build(); d0.poleCapacity = {};
+    PDRD_DESIGN.solve(d0);
+    var st = d0.poles.filter(function(p){ return p.design.decision === 'strut'; });
+    eq(st.length > 0, true, 'есть решения «с подпором»');
+    st.forEach(function(p){
+      var c = d0.calcResult.poles.filter(function(x){ return x.id === p.id; })[0];
+      eq(c.strutUsed, true, 'расчёт с подпором'); eq(c.status !== 'exceed', true, 'с подпором проходит');
+      eq(p.design.reinforce, true, 'отметка подпора');
+    });
+    var sp = PDRD_SPEC.build(d0);
+    eq(sp.items.filter(function(x){ return x.key === 'strut'; })[0].qty, PDRD_DECIDE.totals(d0).reinforce, 'в спецификации');
+    PDRD_SVG.reset(d0);
+    var route = PDRD_SVG.sheets(d0).filter(function(s){ return s.meta.kind === 'route'; })[0];
+    eq(route.notes.some(function(n){ return /не проходящие по допустимой нагрузке/.test(n); }), true, 'на чертеже');
+    var dd = PDRD_DOCX.dataFromProject(d0, PDRD_DOCX.TEMPLATES[0]);
+    eq(dd.tables['Е1'].rows.some(function(r){ return /не проходит по допустимой нагрузке/.test(r[2]); }), true, 'в Е.1');
+    return st.length + ' опор с подпором';
   });
   t('Справочник: колонки тяжения на вершине и с подпором', function(){
     var r = window.PDRD_REFS_IO.parse([['Марка опоры', 'Несущая способность конструкции (с подкосом), кН·м', 'Максимально допустимое горизонтальное тяжение, кН, приложенное к вершине', 'Максимально допустимое горизонтальное тяжение опоры с подпором, кН, приложенное к вершине'], ['А8-1', 20, 9.5, ''], ['П8-1', '', '', 6]]);

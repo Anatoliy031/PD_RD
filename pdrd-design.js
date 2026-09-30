@@ -297,13 +297,16 @@ function run(d) {
     try {
       var struts = /анкер|концев|ответвит/.test(ref.sch);
       var pc = (d.poleCapacity || {})[p.mark] || {}, rc = (RF && RF.capacityOf(p.mark)) || {};
-      var reinf = !!(p.design && p.design.reinforce);
+      var reinf = !!(p.design && (p.design.reinforce || p.design.decision === 'strut'));
       /* допустимое горизонтальное тяжение на вершине, кН: для опор с подкосом, а для
          одностоечной опоры с подпором — значение «с подпором» */
-      var Ttop = reinf ? (num(pc.T_top_strut_kn) !== null ? num(pc.T_top_strut_kn) : num(rc.T_top_strut_kn))
-                       : (num(pc.T_top_kn) !== null ? num(pc.T_top_kn) : num(rc.T_top_kn));
-      if (reinf && Ttop === null) row.warns.push('одностоечная опора с муфтой: предусмотрен подпор; допустимое тяжение опоры с подпором не задано («Справочник» → «Несущая способность») — проверка по стойке без подпора');
-      if (reinf && Ttop !== null) row.warns.push('проверка опоры с подпором: допустимое горизонтальное тяжение на вершине ' + Ttop + ' кН');
+      var TtopBase = num(pc.T_top_kn) !== null ? num(pc.T_top_kn) : num(rc.T_top_kn);
+      var TtopStrut = num(pc.T_top_strut_kn) !== null ? num(pc.T_top_strut_kn) : num(rc.T_top_strut_kn);
+      var Ttop = reinf && TtopStrut !== null ? TtopStrut : TtopBase;
+      row.strutUsed = reinf && TtopStrut !== null;
+      row.strutFor = p.design && p.design.decision === 'strut' ? 'load' : (reinf ? 'sleeve' : '');
+      if (reinf && TtopStrut === null) row.warns.push('предусмотрен подпор, но допустимое тяжение опоры с подпором не задано («Справочник» → «Несущая способность») — проверка без подпора');
+      if (row.strutUsed) row.warns.push('проверка опоры с дополнительным подпором: допустимое горизонтальное тяжение на вершине ' + TtopStrut + ' кН');
       var capProj = num(pc.m_cap_knm);
       var capRef = num(rc.m_cap_knm);
       var cap = struts ? (capProj !== null ? capProj : capRef) : ref.m_adm;
@@ -341,7 +344,7 @@ function run(d) {
 function store(d, res) {
   res = res || run(d);
   d.calcResult = { at: res.at, app: global.PDRD ? global.PDRD.VERSION : '', summary: res.summary,
-    poles: res.poles.map(function (x) { return { id: x.id, status: x.status, reasons: x.reasons, warns: x.warns, M: x.M, Madm: x.Madm, Ftop: x.Ftop, FtopAdm: x.FtopAdm, replace: !!x.replace, scheme: x.scheme, angle: x.angle }; }),
+    poles: res.poles.map(function (x) { return { id: x.id, status: x.status, reasons: x.reasons, warns: x.warns, M: x.M, Madm: x.Madm, Ftop: x.Ftop, FtopAdm: x.FtopAdm, replace: !!x.replace, scheme: x.scheme, angle: x.angle, strutUsed: !!x.strutUsed, strutFor: x.strutFor || '' }; }),
     sections: res.sections.map(function (s) { return { id: s.id, line: s.line, kv: s.kv, status: s.status, Lr: s.Lr, length: s.length, H0: s.solution ? s.solution.H0 : null, fVert: s.fVert, reasons: s.reasons }; }),
     spans: res.spans.map(function (s) { return { section: s.section, line: s.line, from: s.from, to: s.to, L: s.L, status: s.status, clearance: s.clearance, wireDist: s.wireDist, fmax: s.fmax, reasons: s.reasons }; }),
     missing: res.missing };
