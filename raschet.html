@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Расчёты — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.9.2">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.9.3">
 <style>
 .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 14px}
 .frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
@@ -83,12 +83,12 @@ small.r{display:block;color:var(--muted);font-size:12px}
   </section>
   </div>
 </main>
-<script src="pdrd-core.js?v=1.9.2"></script>
-<script src="pdrd-norms.js?v=1.9.2"></script>
-<script src="pdrd-refs-v25.js?v=1.9.2"></script>
-<script src="pdrd-refs.js?v=1.9.2"></script>
-<script src="pdrd-calc.js?v=1.9.2"></script>
-<script src="pdrd-design.js?v=1.9.2"></script>
+<script src="pdrd-core.js?v=1.9.3"></script>
+<script src="pdrd-norms.js?v=1.9.3"></script>
+<script src="pdrd-refs-v25.js?v=1.9.3"></script>
+<script src="pdrd-refs.js?v=1.9.3"></script>
+<script src="pdrd-calc.js?v=1.9.3"></script>
+<script src="pdrd-design.js?v=1.9.3"></script>
 <script>
 (function(){
   var P = PDRD, C = PDRD_CALC, $ = function(id){ return document.getElementById(id); };
@@ -112,11 +112,13 @@ small.r{display:block;color:var(--muted);font-size:12px}
     if (opt.options){ inp = el('select'); opt.options.forEach(function(o){ var op = el('option','',o[1]); op.value = o[0]; inp.appendChild(op); }); }
     else { inp = el('input'); inp.type = opt.type || 'text'; if (opt.inputmode) inp.inputMode = opt.inputmode; }
     inp.id = id;
+    if (opt.ph !== undefined && opt.ph !== null && opt.ph !== '') inp.placeholder = String(opt.ph).replace('.', ',') + ' (справочник)';
     var v = obj[key];
     if (opt.type === 'checkbox') inp.checked = !!v; else inp.value = v === null || v === undefined ? '' : String(v).replace('.', ',');
     inp.onchange = function(){
       obj[key] = opt.type === 'checkbox' ? inp.checked : (opt.text ? inp.value.trim() : numIn(inp.value));
       mark();
+      if (key === 'mark' && obj === d.cable) setTimeout(renderInputs, 0);
     };
     function mark(){ w.classList.toggle('miss', !!opt.req && (obj[key] === null || obj[key] === undefined || obj[key] === '')); }
     mark();
@@ -140,12 +142,13 @@ small.r{display:block;color:var(--muted);font-size:12px}
     field(f, 'Климат подтверждён проектировщиком', c, 'confirmed', { type:'checkbox' });
 
     var cb = d.cable, g = $('fCable'); g.innerHTML = '';
-    field(g, 'Марка', cb, 'mark', { text:true, req:true });
-    field(g, 'Диаметр, мм', cb, 'd_mm', { req:true, inputmode:'decimal' });
-    field(g, 'Масса, кг/км', cb, 'mass_kg_km', { req:true, inputmode:'decimal' });
-    field(g, 'Жёсткость EA, кН', cb, 'EA_kn', { req:true, inputmode:'decimal', hint:'Модуль упругости × площадь несущего элемента' });
-    field(g, 'ТКЛР α, ×10⁻⁶ 1/°C', cb, 'alpha_e6', { req:true, inputmode:'decimal' });
-    field(g, 'МДРН, кН', cb, 't_mdrn_kn', { req:true, inputmode:'decimal', hint:'Максимально допустимая растягивающая нагрузка; по отчёту допустимое тяжение — ' + nf(cb.t_allow_kn, 2) + ' кН' });
+    var rc = (window.PDRD_REFS && PDRD_REFS.cableOf(cb.mark)) || {};
+    field(g, 'Марка', cb, 'mark', { text:true, req:true, hint: rc.mark ? 'Найдена в справочнике: ' + rc.mark + (rc.EA_kn ? ' (EA и ТКЛР есть)' : ' — EA и ТКЛР в справочнике не заданы') : 'Марки нет в справочнике — параметры вводятся вручную' });
+    field(g, 'Диаметр, мм', cb, 'd_mm', { req:true, inputmode:'decimal', ph: rc.d });
+    field(g, 'Масса, кг/км', cb, 'mass_kg_km', { req:true, inputmode:'decimal', ph: rc.m });
+    field(g, 'Жёсткость EA, кН', cb, 'EA_kn', { req:true, inputmode:'decimal', ph: rc.EA_kn, hint:'Модуль упругости × площадь сечения (паспорт). Пусто — из справочника' });
+    field(g, 'ТКЛР α, ×10⁻⁶ 1/°C', cb, 'alpha_e6', { req:true, inputmode:'decimal', ph: rc.alpha_e6, hint:'Пусто — из справочника' });
+    field(g, 'МДРН, кН', cb, 't_mdrn_kn', { req:true, inputmode:'decimal', ph: rc.t, hint:'Максимально допустимая растягивающая нагрузка; по отчёту допустимое тяжение — ' + nf(cb.t_allow_kn, 2) + ' кН' });
     field(g, 'ЭДРН при tсг, кН', cb, 't_edrn_kn', { inputmode:'decimal', hint:'Эксплуатационная (если указана в паспорте)' });
     field(g, 'Тяжение при tсг по проекту, кН', cb, 'h_install_kn', { inputmode:'decimal', hint:'Пусто — подбирается по наиболее нагруженному режиму' });
     field(g, 'Высота подвеса кабеля, м', d.designDefaults, 'cableH', { req:true, inputmode:'decimal', hint:'По отчёту: ' + nf(cb.h_m, 1) + ' м. Проверяется габарит 5,0 м при наибольшей стреле' });
@@ -343,6 +346,6 @@ small.r{display:block;color:var(--muted);font-size:12px}
   if (d.calcResult) { var m = $('runMsg'); m.appendChild(el('div','msg ok','Последний расчёт: ' + new Date(d.calcResult.at).toLocaleString('ru-RU') + '. Нажмите «Сохранить и рассчитать», чтобы обновить.')); }
 })();
 </script>
-<script src="pdrd-nav.js?v=1.9.2"></script>
+<script src="pdrd-nav.js?v=1.9.3"></script>
 </body>
 </html>

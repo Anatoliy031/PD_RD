@@ -681,14 +681,22 @@ function layoutSheets(d) {
       sh.text(x + 34, base + 4, '±0,000', FS.small, { a: 'end' });
       sh.rect(x - 1.8, base - standH * sc, 3.6, standH * sc, 'ВЛ_ОПОРЫ', 0.6);
       /* подкосы и оттяжки анкерных, концевых, угловых и ответвительных опор */
+      /* подкосы анкерных, концевых, угловых и ответвительных опор: в пределах своей
+         колонки листа, подпись — вдоль подкоса, не выходя за его длину */
+      function brace(side, topK, armK, layer, lbl, w) {
+        var yT = base - standH * sc * topK, xT = x + side * 1.8, xB = x + side * standH * sc * armK;
+        sh.line(xT, yT, xB, base, layer, w);
+        sh.line(xB - 2.2, base, xB + 2.2, base, layer, w);               /* опорная плита */
+        var ang = Math.atan2(base - yT, xB - xT) * 180 / Math.PI;
+        if (ang > 90) ang -= 180;
+        var mx = (xT + xB) / 2, my = (yT + base) / 2, off = 2.2;
+        var nx = -(base - yT), ny = (xB - xT), nl = Math.hypot(nx, ny);
+        nx = nx / nl * off * side; ny = ny / nl * off * side;
+        sh.text(mx - nx, my - ny, lbl, FS.small, { a: 'middle', rot: ang, l: layer === 'МУФТЫ' ? 'МУФТЫ' : 'ТЕКСТ' });
+      }
       if (/анкер|концев|ответвит/.test(sch)) {
-        var top = base - standH * sc * 0.72, arm = standH * sc * 0.42;
-        sh.line(x - 1.8, top, x - arm, base, 'ВЛ_ОПОРЫ', 0.6);
-        sh.text(x - arm, base + 4, 'подкос', FS.small, { a: 'middle' });
-        if (!/концев/.test(sch)) {
-          sh.line(x + 1.8, top, x + arm, base, 'ВЛ_ОПОРЫ', 0.6);
-          sh.text(x + arm, base + 4, 'подкос', FS.small, { a: 'middle' });
-        }
+        brace(-1, 0.62, 0.28, 'ВЛ_ОПОРЫ', 'подкос', 0.6);
+        if (!/концев/.test(sch)) brace(1, 0.62, 0.28, 'ВЛ_ОПОРЫ', 'подкос', 0.6);
       }
       var wires = [];
       (p.fromReport || []).forEach(function (r) { ((d.wiresByKv || {})[String(r.kv).replace('.', ',')] || []).forEach(function (w) { wires.push({ w: w, kv: r.kv }); }); });
@@ -727,8 +735,10 @@ function layoutSheets(d) {
       sh.text(x, base + 23, 'высота ОК: ' + fm(hs[0], 2) + '…' + fm(hs[hs.length - 1], 2) + ' м', FS.small, { a: 'middle' });
       var nStrut = ps.filter(function (q) { return q.design.reinforce; }).length;
       if (nStrut) {
-        sh.line(x + 1.8, base - standH * sc * 0.62, x + standH * sc * 0.4, base, 'МУФТЫ', 0.7);
-        sh.text(x + standH * sc * 0.4, base + 4, 'подпор', FS.small, { a: 'middle', l: 'МУФТЫ' });
+        /* дополнительный подпор — крутой, ниже кабеля и подписей, красным; для опор с
+           подкосами — внутри треугольника подкоса */
+        var anch = /анкер|концев|ответвит/.test(sch);
+        brace(1, anch ? 0.4 : 0.45, anch ? 0.13 : 0.18, 'МУФТЫ', 'подпор', 0.7);
         sh.text(x, base + 28, 'с подпором: ' + nStrut + ' оп. (' + ps.filter(function (q) { return q.design.reinforce; }).map(poleNums).slice(0, 6).join(', ') + ')', FS.small, { a: 'middle', l: 'МУФТЫ', max: 90 });
       }
     });
@@ -1409,6 +1419,23 @@ function buildSheets(d) {
   });
   return all;
 }
+/* Почему какой-то лист не построен или построен формой — для страницы «Чертежи» */
+function diagnose(d) {
+  var out = [], D = global.PDRD_DESIGN, X = global.PDRD_DECIDE;
+  if (!d.poles.some(onRoute)) { out.push('Решения по опорам не приняты — листы трассы и типовые листы не строятся (страница «Решения»).'); return out; }
+  var kvs = {}, seen = {};
+  d.lines.forEach(function (l) { seen[String(l.kv)] = 1; var k = num(l.kv); if (l.cable !== false && k !== null) kvs[k <= 1 ? 'lv' : 'hv'] = 1; });
+  d.poles.forEach(function (p) { if (!onRoute(p)) return; (p.fromReport || []).forEach(function (r) { seen[String(r.kv)] = 1; var k = num(r.kv); if (k !== null) kvs[k <= 1 ? 'lv' : 'hv'] = 1; }); });
+  if (!kvs.lv) out.push('Профили пересечения не построены: в трассе не найдено ВЛ 0,4 кВ (классы напряжения в данных: ' + Object.keys(seen).join(', ') + ').');
+  else if (!kvs.hv) out.push('Профиль пересечения 0,4–10 кВ не построен: в трассе нет ВЛ 6–10 кВ.');
+  if (D) {
+    var inp = D.inputs(d);
+    if (inp.miss.length) out.push('Монтажные таблицы построены формой без значений — не хватает: ' + inp.miss.map(function (m) { return m.text; }).join('; ') + '.');
+  }
+  if (X) { var tt = X.totals(d); if (!tt.sleeves) out.push('Лист «Натяжное крепление ОК с размещением муфты…» не построен: муфты не назначены (страница «Решения» → «Муфты и запасы кабеля»).'); }
+  if (!global.PDRD_TYPICAL_IMG) out.push('Образцы типовых листов не загрузились (файл pdrd-typical-img.js) — листы начерчены программой.');
+  return out;
+}
 function sheetList(d) {
   var list = sheets(d), code = (d.passport.shifr || 'ШИФР НЕ УТВЕРЖДЁН') + '-ЛКС';
   return { caption: 'Таблица — Ведомость рабочих чертежей основного комплекта',
@@ -1446,6 +1473,6 @@ function toSvg(sh) {
   return o.join('');
 }
 
-global.PDRD_SVG = { reset: reset, drawVector: drawVector, W: W, H: H, LAYERS: LAYERS, FS: FS, Sheet: Sheet, sheets: sheets, sheetList: sheetList,
+global.PDRD_SVG = { diagnose: diagnose, reset: reset, drawVector: drawVector, W: W, H: H, LAYERS: LAYERS, FS: FS, Sheet: Sheet, sheets: sheets, sheetList: sheetList,
   toSvg: toSvg, ekus: ekus, segments: segments, poleSymbol: poleSymbol, surname: surname, fitSheet: fitSheet, bbox: bbox, zone: zone, projection: projection };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -5,7 +5,7 @@
 (function (global) {
 'use strict';
 
-var VERSION = '1.9.2';
+var VERSION = '1.9.3';
 var SCHEMA  = 'pdrd-project/1';
 var PREFIX  = 'pdrd_';
 var KEY     = 'pdrd_project_v1';

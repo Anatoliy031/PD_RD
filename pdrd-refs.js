@@ -21,7 +21,12 @@ var CAPACITY = /* справочник филиала, лист «Несущая
 var KEY = 'pdrd_refs_v1';
 
 function norm(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
-function normKey(s) { return norm(s).toUpperCase().replace(/[\s\-]/g, '').replace(/,/g, '.'); }
+/* латинские буквы, похожие на кириллические (x/х, c/с, p/р…), приводятся к кириллице:
+   «ДПТс-П-32У(4x8)» и «ДПТс-П-32У(4х8)» — одна марка */
+var LOOK = { 'A': 'А', 'B': 'В', 'C': 'С', 'E': 'Е', 'H': 'Н', 'K': 'К', 'M': 'М', 'O': 'О', 'P': 'Р', 'T': 'Т', 'X': 'Х', 'Y': 'У' };
+function normKey(s) {
+  return norm(s).toUpperCase().replace(/[\s\-_]/g, '').replace(/,/g, '.').replace(/[ABCEHKMOPTXY]/g, function (c) { return LOOK[c]; });
+}
 function loadCustom() {
   try { var s = global.localStorage && global.localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; }
 }

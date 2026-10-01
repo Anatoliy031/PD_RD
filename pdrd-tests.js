@@ -703,6 +703,31 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     eq(typeof r0.Ftop === 'number' && r0.FtopAdm === 9000, true, 'используется в расчёте проекта взамен кН·м');
     return 'F = ' + (r0.Ftop / 1000).toFixed(2) + ' кН из 9';
   });
+  t('Компоновка: подкосы и подпор не выходят за колонку марки, подписи вдоль них', function(){
+    PDRD_SVG.reset(demo);
+    var lay = PDRD_SVG.sheets(demo).filter(function(s){ return s.meta.kind === 'layout'; })[0];
+    var marks = lay.p.filter(function(e){ return e.t === 'text' && e.b && /^[А-ЯA-Z]{1,3}\d/.test(e.s); }).map(function(e){ return e.x; }).sort(function(a, b){ return a - b; });
+    eq(marks.length >= 2, true, 'несколько марок');
+    var half = (marks[1] - marks[0]) / 2;
+    var braces = lay.p.filter(function(e){ return e.t === 'line' && Math.abs(e.x2 - e.x1) > 1 && Math.abs(e.y2 - e.y1) > 3 && (e.l === 'ВЛ_ОПОРЫ' || e.l === 'МУФТЫ'); });
+    braces.forEach(function(e){
+      var c = marks.reduce(function(a, m){ return Math.abs(m - e.x1) < Math.abs(a - e.x1) ? m : a; }, marks[0]);
+      if (Math.abs(e.x2 - c) > half - 1) throw new Error('подкос выходит за колонку марки');
+    });
+    eq(lay.p.some(function(e){ return e.t === 'text' && /подпор|подкос/.test(e.s) && e.rot; }), true, 'подписи вдоль подкосов');
+    return braces.length + ' подкосов/подпоров';
+  });
+  t('Марка кабеля с латинской «x» находится в справочнике', function(){
+    var c = PDRD_REFS.cableOf('ДПТс-П-32У(4x8)');
+    eq(!!c && c.EA_kn > 0, true, 'найдена');
+    return c.mark;
+  });
+  t('Диагностика: почему лист не построен', function(){
+    var d0 = window.PDRD_DEMO.build(); d0.climate.tMax = null;
+    var dg = PDRD_SVG.diagnose(d0);
+    eq(dg.some(function(x){ return /Монтажные таблицы построены формой/.test(x); }), true, 'монтажные — форма');
+    return dg.length + ' пояснений';
+  });
   t('Подпор: опора выделена красным на схеме размещения и на плане', function(){
     PDRD_SVG.reset(demo);
     var sh = PDRD_SVG.sheets(demo);
