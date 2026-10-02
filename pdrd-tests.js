@@ -760,7 +760,7 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
   t('Типовые листы филиала: профили пересечения и схемы креплений со спецификацией', function(){
     PDRD_SVG.reset(demo);
     var sh = PDRD_SVG.sheets(demo), titles = sh.map(function(s){ return s.meta.title; }).join(' | ');
-    ['Профиль пересечения с автодорогой в пролёте опор ВЛ 0,4 кВ', 'Профиль пересечения с автодорогой в пролёте опор ВЛ 0,4–10 кВ',
+    ['Профиль пересечения с автодорогой в пролете опор ВЛ 0,4 кВ филиала ПАО «Россети Юг» - «Кубаньэнерго»', 'Профиль пересечения с автодорогой в пролете опор ВЛ 0,4-10 кВ филиала ПАО «Россети Юг» - «Кубаньэнерго»',
      'Натяжное крепление ОК с размещением муфты и запаса кабеля на стойке типа СВ', 'Схема натяжного крепления ОК и обводки шлейфа на опорах ВЛ',
      'Схема поддерживающего крепления ОК на опорах'].forEach(function(n){ if (titles.indexOf(n) < 0) throw new Error('нет листа: ' + n); });
     var prof = sh.filter(function(s){ return /Профиль пересечения/.test(s.meta.title); })[0];
@@ -794,6 +794,16 @@ if (DM && window.PDRD_SPEC && window.PDRD_SVG && window.PDRD_AUDIT) {
     var m = PDRD_SVG.sheets(d0).filter(function(s){ return s.meta.kind === 'montage'; });
     eq(m.length > 0 && !/не хватает/.test(m[0].notes.join(' ')), true, 'таблицы рассчитаны');
     return 'EA = 506,8 кН';
+  });
+  t('Два листа профилей — обязательно в конце комплекта любого проекта', function(){
+    var b0 = P.blank(); PDRD_SVG.reset(b0);
+    var s0 = PDRD_SVG.sheets(b0);
+    eq(s0.length, 2, 'даже в пустом проекте');
+    PDRD_SVG.reset(demo);
+    var sh = PDRD_SVG.sheets(demo);
+    eq(/0,4 кВ филиала/.test(sh[sh.length - 2].meta.title) && /0,4-10 кВ филиала/.test(sh[sh.length - 1].meta.title), true, 'последние два листа');
+    sh.slice(-2).forEach(function(s){ eq(s.notes[0].indexOf('пункт 2.5.197') > 0, true, 'примечание'); });
+    return 'листы ' + sh[sh.length - 2].meta.num + ' и ' + sh[sh.length - 1].meta.num;
   });
   t('Монтажные таблицы строятся и при неполных данных (форма с перечнем недостающего)', function(){
     var d0 = window.PDRD_DEMO.build(); d0.cable.EA_kn = null; PDRD_SVG.reset(d0);

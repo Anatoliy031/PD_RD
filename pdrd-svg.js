@@ -1374,16 +1374,8 @@ function imageSheet(title, parts, notes) {
 
 function typicalSheets(d) {
   var X = global.PDRD_DECIDE, out = [];
-  if (!d.poles.some(onRoute)) return out;
-  var kvs = {};
-  d.lines.forEach(function (l) { var k = num(l.kv); if (l.cable !== false && k !== null) kvs[k <= 1 ? 'lv' : 'hv'] = 1; });
-  d.poles.forEach(function (p) { if (!onRoute(p)) return; (p.fromReport || []).forEach(function (r) { var k = num(r.kv); if (k !== null) kvs[k <= 1 ? 'lv' : 'hv'] = 1; }); });
   var NOTE_PROF = 'Стрела провеса проектируемого кабеля указана при нормальных условиях. Согласно ПУЭ (7 издание), пункт 2.5.197, расстояние от фазных проводов до волоконно-оптического кабеля на опорах ВЛ до 35 кВ должно быть не менее 0,6 м.';
   function pick(img, fallback) { return img || fallback(); }
-  if (kvs.lv) out.push(pick(imageSheet('Профиль пересечения с автодорогой в пролёте опор ВЛ 0,4 кВ ПАО «Россети Юг» — «Кубаньэнерго»', [{ key: 'profil_04' }], [NOTE_PROF]),
-    function () { return crossProfile(d, '0,4'); }));
-  if (kvs.lv && kvs.hv) out.push(pick(imageSheet('Профиль пересечения с автодорогой в пролёте опор ВЛ 0,4–10 кВ ПАО «Россети Юг» — «Кубаньэнерго»', [{ key: 'profil_04_10' }], [NOTE_PROF]),
-    function () { return crossProfile(d, '0,4-10'); }));
   var tt = X ? X.totals(d) : { nodes: {}, sleeves: 0 };
   if (tt.sleeves) out.push(pick(imageSheet('Натяжное крепление ОК с размещением муфты и запаса кабеля на стойке типа СВ', [{ key: 'mufta_sv' }, { key: 'mufta_sv_spec' }], []),
     function () { return sleeveSheet(d); }));
@@ -1391,6 +1383,11 @@ function typicalSheets(d) {
     function () { return tensionScheme(d); }));
   if (tt.nodes['П'] || tt.nodes['ПУ']) out.push(pick(imageSheet('Схема поддерживающего крепления ОК на опорах', [{ key: 'podderzh' }], []),
     function () { return suspensionScheme(d); }));
+  /* два обязательных листа в конце комплекта каждого проекта (образцы заказчика без изменений) */
+  out.push(pick(imageSheet('Профиль пересечения с автодорогой в пролете опор ВЛ 0,4 кВ филиала ПАО «Россети Юг» - «Кубаньэнерго»', [{ key: 'profil_04' }], [NOTE_PROF]),
+    function () { return crossProfile(d, '0,4'); }));
+  out.push(pick(imageSheet('Профиль пересечения с автодорогой в пролете опор ВЛ 0,4-10 кВ филиала ПАО «Россети Юг» - «Кубаньэнерго»', [{ key: 'profil_04_10' }], [NOTE_PROF]),
+    function () { return crossProfile(d, '0,4-10'); }));
   return out;
 }
 
@@ -1426,8 +1423,6 @@ function diagnose(d) {
   var kvs = {}, seen = {};
   d.lines.forEach(function (l) { seen[String(l.kv)] = 1; var k = num(l.kv); if (l.cable !== false && k !== null) kvs[k <= 1 ? 'lv' : 'hv'] = 1; });
   d.poles.forEach(function (p) { if (!onRoute(p)) return; (p.fromReport || []).forEach(function (r) { seen[String(r.kv)] = 1; var k = num(r.kv); if (k !== null) kvs[k <= 1 ? 'lv' : 'hv'] = 1; }); });
-  if (!kvs.lv) out.push('Профили пересечения не построены: в трассе не найдено ВЛ 0,4 кВ (классы напряжения в данных: ' + Object.keys(seen).join(', ') + ').');
-  else if (!kvs.hv) out.push('Профиль пересечения 0,4–10 кВ не построен: в трассе нет ВЛ 6–10 кВ.');
   if (D) {
     var inp = D.inputs(d);
     if (inp.miss.length) out.push('Монтажные таблицы построены формой без значений — не хватает: ' + inp.miss.map(function (m) { return m.text; }).join('; ') + '.');

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Решения по опорам — PD_RD</title>
-<link rel="stylesheet" href="pdrd-ui.css?v=1.9.3">
+<link rel="stylesheet" href="pdrd-ui.css?v=1.9.4">
 <style>
 .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px}
 .frm label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
@@ -74,6 +74,13 @@ small.r{display:block;color:var(--muted);font-size:12px}
   </section>
 
   <section class="panel">
+    <h2>Кабель и условия для монтажных таблиц</h2>
+    <p class="sub">Листы «Монтажные таблицы стрел провеса и тяжений» выпускаются в каждом проекте. Для кабелей ДПТс-П-32У(4х8) и ДПТс-П-48У(6х8) параметры берутся из справочника автоматически (показаны серым). Для любого другого кабеля впишите недостающие параметры из паспорта изготовителя: жёсткость EA = модуль упругости (кН/мм²) × площадь сечения (мм²); ТКЛР — температурный коэффициент линейного расширения.</p>
+    <div class="frm" id="fMont" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 14px"></div>
+    <div id="montMsg"></div>
+  </section>
+
+  <section class="panel">
     <h2>Муфты и запасы кабеля</h2>
     <p class="sub">Опоры под муфты указывает проектировщик или заказчик. Введите номер опоры, выберите её в списке и нажмите «Назначить муфту». Назначенные опоры перечислены ниже; там же меняется тип муфты и длина запаса. На одностоечную опору с муфтой устанавливается дополнительный подпор — такие опоры отмечены в столбце «Подпор», выделяются красным на чертежах и попадают в спецификацию.</p>
     <div class="frm" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px">
@@ -107,14 +114,14 @@ small.r{display:block;color:var(--muted);font-size:12px}
   </section>
   </div>
 </main>
-<script src="pdrd-core.js?v=1.9.3"></script>
-<script src="pdrd-norms.js?v=1.9.3"></script>
-<script src="pdrd-profiles.js?v=1.9.3"></script>
-<script src="pdrd-refs-v25.js?v=1.9.3"></script>
-<script src="pdrd-refs.js?v=1.9.3"></script>
-<script src="pdrd-calc.js?v=1.9.3"></script>
-<script src="pdrd-design.js?v=1.9.3"></script>
-<script src="pdrd-decide.js?v=1.9.3"></script>
+<script src="pdrd-core.js?v=1.9.4"></script>
+<script src="pdrd-norms.js?v=1.9.4"></script>
+<script src="pdrd-profiles.js?v=1.9.4"></script>
+<script src="pdrd-refs-v25.js?v=1.9.4"></script>
+<script src="pdrd-refs.js?v=1.9.4"></script>
+<script src="pdrd-calc.js?v=1.9.4"></script>
+<script src="pdrd-design.js?v=1.9.4"></script>
+<script src="pdrd-decide.js?v=1.9.4"></script>
 <script>
 (function(){
   var P = PDRD, X = PDRD_DECIDE, C = PDRD_CALC, $ = function(id){ return document.getElementById(id); };
@@ -335,9 +342,43 @@ small.r{display:block;color:var(--muted);font-size:12px}
   };
   $('bSave').onclick = function(){ P.replaceAll(d); d = P.load(); msg('ok','Решения сохранены.'); refresh(); };
 
-  params(); sleeveUi(); lines(); sleevePanel(); refresh();
+  function montPanel(){
+    var host = $('fMont'); host.innerHTML = '';
+    d.designDefaults = d.designDefaults || {};
+    var rc = (window.PDRD_REFS && PDRD_REFS.cableOf(d.cable.mark)) || {};
+    var F = [
+      [d.cable, 'mark', 'Марка кабеля', true, ''],
+      [d.cable, 'd_mm', 'Диаметр, мм', false, rc.d],
+      [d.cable, 'mass_kg_km', 'Масса, кг/км', false, rc.m],
+      [d.cable, 'EA_kn', 'Жёсткость EA, кН', false, rc.EA_kn],
+      [d.cable, 'alpha_e6', 'ТКЛР, ×10⁻⁶ 1/°C', false, rc.alpha_e6],
+      [d.cable, 't_mdrn_kn', 'МДРН, кН', false, rc.t],
+      [d.climate, 'tMax', 'Высшая температура, °C', false, ''],
+      [d.climate, 'tMin', 'Низшая температура, °C', false, ''],
+      [d.climate, 'tAvg', 'Среднегодовая температура, °C', false, ''],
+      [d.designDefaults, 'cableH', 'Высота подвеса кабеля, м', false, '']
+    ];
+    F.forEach(function(f){
+      var w = el('div'), id = 'm_' + f[1], l = el('label','',f[2]), i = el('input');
+      l.htmlFor = id; i.id = id; l.style.cssText = 'display:block;font-size:13px;font-weight:600;margin-bottom:4px';
+      i.style.cssText = 'width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:15px';
+      if (!f[3]) i.inputMode = 'decimal';
+      var v = f[0][f[1]]; i.value = v === null || v === undefined ? '' : String(v).replace('.', ',');
+      if (f[4] !== undefined && f[4] !== null && f[4] !== '') i.placeholder = String(f[4]).replace('.', ',') + ' (справочник)';
+      i.onchange = function(){
+        f[0][f[1]] = f[3] ? i.value.trim() : numIn(i.value);
+        P.replaceAll(d); d = P.load(); montPanel();
+      };
+      w.appendChild(l); w.appendChild(i); host.appendChild(w);
+    });
+    var miss = PDRD_DESIGN.inputs(d).miss, m = $('montMsg'); m.innerHTML = '';
+    m.appendChild(el('div', 'msg ' + (miss.length ? 'warn' : 'ok'), miss.length
+      ? 'Монтажные таблицы будут выпущены формой без значений — не хватает: ' + miss.map(function(x){ return x.text; }).join('; ') + '.'
+      : 'Данных достаточно: монтажные таблицы будут рассчитаны (страница «Чертежи»). После изменения параметров нажмите «Пересчитать с принятыми решениями».'));
+  }
+  params(); montPanel(); sleeveUi(); lines(); sleevePanel(); refresh();
 })();
 </script>
-<script src="pdrd-nav.js?v=1.9.3"></script>
+<script src="pdrd-nav.js?v=1.9.4"></script>
 </body>
 </html>
